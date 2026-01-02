@@ -1,8 +1,10 @@
 services:
   - type: web
     name: telegram-a2e-web
-    env: docker
+    env: node
     plan: free
+    buildCommand: "cd frontend && npm install && npm run build && cd ../new_backend && npm install"
+    startCommand: "cd new_backend && node index.js"
     envVars:
       - key: PORT
         value: 10000
