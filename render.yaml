@@ -3,7 +3,7 @@ services:
     name: telegram-a2e-web
     env: node
     plan: free
-    buildCommand: "npm ci"
+    buildCommand: "cd frontend && yarn install && yarn build"
     startCommand: "node index.js"
     envVars:
       - key: PORT
