@@ -3,7 +3,7 @@ services:
     name: telegram-a2e-web
     env: node
     plan: free
-    buildCommand: "cd frontend && npm install && npm run build && cd ../new_backend && npm install"
+    buildCommand: "cd new_backend && npm ci"
     startCommand: "cd new_backend && node index.js"
     envVars:
       - key: PORT
