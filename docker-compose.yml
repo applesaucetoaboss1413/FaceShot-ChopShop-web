@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: telegram-a2e-web
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/new_backend/data
+      - ./new_backend/production.db:/app/new_backend/production.db
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/new_backend/production.db

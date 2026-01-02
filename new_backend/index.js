@@ -19,16 +19,61 @@ const logger = winston.createLogger({
 
 const app = express()
 app.use(express.json({
-  limit: '10mb',
-  verify: (req, res, buf) => {
-    if (req.originalUrl === '/webhook/stripe') {
-      req.rawBody = buf
+    limit: '10mb',
+    verify: (req, res, buf) => {
+        if (req.originalUrl === '/webhook/stripe') {
+            req.rawBody = buf
+        }
     }
-  }
 }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }))
 app.use(helmet())
+
+// Simple in-memory rate limiter for production security
+const rateLimitMap = new Map()
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000 // 15 minutes
+const RATE_LIMIT_MAX = 100 // limit each IP to 100 requests per windowMs
+
+// Cleanup old entries every hour
+setInterval(() => {
+    const now = Date.now()
+    for (const [ip, data] of rateLimitMap.entries()) {
+        if (now - data.startTime > RATE_LIMIT_WINDOW) {
+            rateLimitMap.delete(ip)
+        }
+    }
+}, 60 * 60 * 1000)
+
+const limiter = (req, res, next) => {
+    // Skip rate limiting for health checks
+    if (req.path === '/health' || req.path === '/alive' || req.path === '/ready') return next()
+
+    const ip = req.ip
+    const now = Date.now()
+
+    if (!rateLimitMap.has(ip)) {
+        rateLimitMap.set(ip, { count: 1, startTime: now })
+        return next()
+    }
+
+    const data = rateLimitMap.get(ip)
+
+    if (now - data.startTime > RATE_LIMIT_WINDOW) {
+        data.count = 1
+        data.startTime = now
+        return next()
+    }
+
+    if (data.count >= RATE_LIMIT_MAX) {
+        return res.status(429).json({ error: 'too_many_requests' })
+    }
+
+    data.count++
+    next()
+}
+
+app.use(limiter)
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
@@ -41,7 +86,7 @@ cloudinary.config({
 
 const upload = multer({ storage: multer.memoryStorage() })
 
-const db = new Database('staging.db')
+const db = new Database(process.env.DB_PATH || 'production.db')
 db.exec(
     `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE);
    CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
@@ -184,7 +229,23 @@ app.get('/api/miniapp/status', (req, res) => {
     res.json({ job_id: current.id, status: current.status })
 })
 
+const path = require('path')
+
+// ... existing code ...
+
 const port = process.env.PORT || 3000
+
+// Serve static frontend files in production
+if (process.env.NODE_ENV === 'production') {
+    app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+    app.get('*', (req, res) => {
+        // Skip API routes
+        if (req.path.startsWith('/api')) return res.status(404).json({ error: 'not_found' });
+        res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+    });
+}
+
 app.listen(port, () => {
     logger.info({ msg: 'server_started', port })
 })
