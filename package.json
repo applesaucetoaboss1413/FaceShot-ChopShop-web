@@ -1,0 +1,11 @@
+{
+  "name": "telegram-a2e-web",
+  "private": true,
+  "scripts": {
+    "start": "node new_backend/index.js",
+    "build": "cd new_backend && npm ci"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
