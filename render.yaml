@@ -3,8 +3,8 @@ services:
     name: telegram-a2e-web
     env: node
     plan: free
-    buildCommand: "npm run build"
-    startCommand: "npm start"
+    buildCommand: "npm ci"
+    startCommand: "node index.js"
     envVars:
       - key: PORT
         value: 10000
