@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
-import { getCredits } from '../lib/api';
+import { useAuth } from '../../lib/auth';
+import { getCredits } from '../../lib/api';
 
 export function Header() {
     const { user, logout } = useAuth();
