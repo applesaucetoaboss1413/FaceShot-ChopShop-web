@@ -14,7 +14,7 @@ This guide explains how to deploy the FaceShot-ChopShop Web App using Docker.
 1. **Clone the repository:**
    ```bash
    git clone <repository_url>
-   cd faceshot-chopshop
+   cd telegram-a2e-web
    ```
 
 2. **Configure Environment Variables:**
@@ -23,12 +23,12 @@ This guide explains how to deploy the FaceShot-ChopShop Web App using Docker.
    cp scripts/.env.example .env
    nano .env
    ```
-   Ensure `NODE_ENV=production` and `DB_PATH=/app/new_backend/production.db` are set (or use defaults in docker-compose).
+   Ensure `NODE_ENV=production` and `DB_PATH=/app/production.db` are set (or use defaults in docker-compose).
 
 3. **Initialize Database File:**
    Create an empty database file to be mounted by Docker.
    ```bash
-   touch new_backend/production.db
+   touch production.db
    ```
 
 ## Build and Run
@@ -67,7 +67,7 @@ This guide explains how to deploy the FaceShot-ChopShop Web App using Docker.
 ## Data Persistence
 
 The SQLite database is mounted as a volume:
-- Host path: `./new_backend/production.db`
-- Container path: `/app/new_backend/production.db`
+- Host path: `./production.db`
+- Container path: `/app/production.db`
 
 This ensures that your user data and job history are preserved even if the container is destroyed.

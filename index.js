@@ -7,6 +7,7 @@ const multer = require('multer')
 const Stripe = require('stripe')
 const cloudinary = require('cloudinary').v2
 const axios = require('axios')
+const jwt = require('jsonwebtoken')
 const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
@@ -80,6 +81,21 @@ const limiter = (req, res, next) => {
 
     data.count++
     next()
+}
+
+const authenticateToken = (req, res, next) => {
+    const auth = req.headers['authorization'] || ''
+    if (!auth.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'unauthorized' })
+    }
+    const token = auth.slice(7)
+    try {
+        const payload = jwt.verify(token, process.env.SESSION_SECRET)
+        req.user = { id: payload && payload.id ? payload.id : payload?.sub || 0 }
+        next()
+    } catch (e) {
+        return res.status(401).json({ error: 'invalid_token' })
+    }
 }
 
 app.post('/webhook/stripe', async (req, res) => {

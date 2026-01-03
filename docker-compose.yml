@@ -8,10 +8,11 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/new_backend/data
-      - ./new_backend/production.db:/app/new_backend/production.db
+      - ./production.db:/app/production.db
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - DB_PATH=/app/new_backend/production.db
+      - DB_PATH=/app/production.db
+      - PORT=3000
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
