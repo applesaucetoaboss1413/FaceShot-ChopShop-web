@@ -120,7 +120,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step 4: Update Status and Creations Endpoints
+### [x] Step 4: Update Status and Creations Endpoints
 <!-- chat-id: 215659a1-de9b-4608-835a-2573feab7249 -->
 
 **Objective**: Update frontend-facing endpoints to return A2E results

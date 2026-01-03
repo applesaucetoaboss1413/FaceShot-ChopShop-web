@@ -10,8 +10,8 @@ export default function FAQs() {
                     <p className="text-gray-600">Credits are used to generate media. Each tool consumes a specific amount of credits per usage.</p>
                 </div>
                 <div>
-                    <h2 className="text-xl font-bold mb-2">Is this isolated from the main bot?</h2>
-                    <p className="text-gray-600">Yes, this web platform operates independently but syncs with your Telegram account for login.</p>
+                    <h2 className="text-xl font-bold mb-2">Is my data secure?</h2>
+                    <p className="text-gray-600">Yes, this web platform uses industry-standard security practices to protect your data and media.</p>
                 </div>
                 <div>
                     <h2 className="text-xl font-bold mb-2">How do I purchase?</h2>

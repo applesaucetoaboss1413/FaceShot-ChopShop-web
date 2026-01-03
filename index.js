@@ -99,6 +99,40 @@ const authenticateToken = (req, res, next) => {
     }
 }
 
+const addCredits = (userId, amount) => {
+    const transaction = db.transaction(() => {
+        const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(userId)
+        const newBalance = (current ? current.balance : 0) + amount
+        
+        if (current) {
+            db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, userId)
+        } else {
+            db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, newBalance)
+        }
+        
+        return newBalance
+    })
+    
+    return transaction()
+}
+
+const deductCredits = (userId, amount) => {
+    const transaction = db.transaction(() => {
+        const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(userId)
+        
+        if (!current || current.balance < amount) {
+            throw new Error('insufficient_credits')
+        }
+        
+        const newBalance = current.balance - amount
+        db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, userId)
+        
+        return newBalance
+    })
+    
+    return transaction()
+}
+
 app.post('/webhook/stripe', async (req, res) => {
     const sig = req.headers['stripe-signature']
     let event
@@ -115,7 +149,6 @@ app.post('/webhook/stripe', async (req, res) => {
 
         if (source === 'web' && user_id) {
             try {
-                // Add purchase record
                 db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)').run(
                     user_id, 
                     pack_type, 
@@ -124,15 +157,7 @@ app.post('/webhook/stripe', async (req, res) => {
                     new Date().toISOString()
                 )
                 
-                // Update user credits
-                const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(user_id)
-                const newBalance = (current ? current.balance : 0) + Number(points)
-                
-                if (current) {
-                    db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, user_id)
-                } else {
-                    db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(user_id, newBalance)
-                }
+                addCredits(user_id, Number(points))
                 
                 logger.info({ msg: 'payment_success', user_id, points })
             } catch (e) {
@@ -169,6 +194,9 @@ db.exec(
 
 const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
+const A2EService = require('./services/a2e')
+
+const pollingJobs = new Map()
 
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' })
@@ -329,8 +357,52 @@ app.get('/api/web/credits', authenticateToken, (req, res) => {
 })
 
 app.get('/api/web/creations', authenticateToken, (req, res) => {
-    const items = db.prepare('SELECT * FROM miniapp_creations WHERE user_id=? ORDER BY id DESC LIMIT 20').all(req.user.id)
-    res.json({ items })
+    try {
+        const creations = db.prepare(`
+            SELECT 
+                m.id,
+                m.user_id,
+                m.type,
+                m.url as upload_url,
+                m.created_at,
+                j.id as job_id,
+                j.status as job_status,
+                j.result_url,
+                j.cost_credits,
+                j.error_message
+            FROM miniapp_creations m
+            LEFT JOIN jobs j ON j.user_id = m.user_id 
+                AND j.type = m.type 
+                AND j.id = (
+                    SELECT MAX(id) FROM jobs 
+                    WHERE user_id = m.user_id 
+                    AND type = m.type 
+                    AND created_at >= m.created_at
+                )
+            WHERE m.user_id = ?
+            ORDER BY m.id DESC
+            LIMIT 20
+        `).all(req.user.id)
+        
+        const items = creations.map(c => ({
+            id: c.id,
+            user_id: c.user_id,
+            type: c.type,
+            status: c.job_status || 'uploaded',
+            url: c.result_url || c.upload_url,
+            upload_url: c.upload_url,
+            result_url: c.result_url,
+            job_id: c.job_id,
+            cost_credits: c.cost_credits || 0,
+            error_message: c.error_message,
+            created_at: c.created_at
+        }))
+        
+        res.json({ items })
+    } catch (e) {
+        logger.error({ msg: 'creations_error', error: String(e) })
+        res.status(500).json({ error: 'creations_fetch_failed', message: 'Failed to retrieve creations' })
+    }
 })
 
 app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req, res) => {
@@ -353,10 +425,63 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
-        const type = req.body.type
+        const { type, options = {} } = req.body
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
-        const job = db.prepare('INSERT INTO jobs (user_id, type, status, created_at, updated_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'processing', new Date().toISOString(), new Date().toISOString())
-        res.json({ job_id: job.lastInsertRowid, status: 'processing' })
+        
+        const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
+        if (!creditRow || creditRow.balance < 10) {
+            return res.status(402).json({ error: 'insufficient_credits' })
+        }
+        
+        const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(req.user.id, type)
+        if (!upload || !upload.url) {
+            return res.status(400).json({ error: 'no_media_uploaded' })
+        }
+        
+        const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+        
+        let a2eResponse
+        try {
+            a2eResponse = await a2eService.startTask(type, upload.url, options)
+        } catch (a2eError) {
+            logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
+            return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
+        }
+        
+        if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
+            return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
+        }
+        
+        const taskId = a2eResponse.data._id
+        const costCredits = a2eResponse.data.coins || 10
+        
+        const deductCredits = db.transaction((userId, amount) => {
+            const current = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(userId)
+            if (!current || current.balance < amount) {
+                throw new Error('insufficient_credits')
+            }
+            db.prepare('UPDATE user_credits SET balance = balance - ? WHERE user_id = ?').run(amount, userId)
+        })
+        
+        try {
+            deductCredits(req.user.id, costCredits)
+        } catch (error) {
+            return res.status(402).json({ error: 'insufficient_credits' })
+        }
+        
+        const job = db.prepare('INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, created_at, updated_at) VALUES (?,?,?,?,?,?,?)').run(
+            req.user.id, 
+            type, 
+            'processing', 
+            taskId, 
+            costCredits, 
+            new Date().toISOString(), 
+            new Date().toISOString()
+        )
+        
+        startStatusPolling(job.lastInsertRowid, type, taskId)
+        
+        res.json({ job_id: job.lastInsertRowid, status: 'processing', estimated_credits: costCredits })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
         res.status(500).json({ error: 'process_failed' })
@@ -364,15 +489,35 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
 })
 
 app.get('/api/web/status', (req, res) => {
-    const id = req.query.id
-    if (!id) return res.status(400).json({ error: 'missing_id' })
-    const row = db.prepare('SELECT * FROM jobs WHERE id=?').get(Number(id))
-    if (!row) return res.status(404).json({ error: 'not_found' })
-    if (row.status !== 'completed') {
-        db.prepare("UPDATE jobs SET status='completed', updated_at=? WHERE id=?").run(new Date().toISOString(), row.id)
+    try {
+        const id = req.query.id
+        if (!id) {
+            return res.status(400).json({ error: 'missing_id', message: 'Job ID is required' })
+        }
+        
+        const jobId = Number(id)
+        if (isNaN(jobId)) {
+            return res.status(400).json({ error: 'invalid_id', message: 'Job ID must be a number' })
+        }
+        
+        const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId)
+        if (!job) {
+            return res.status(404).json({ error: 'not_found', message: 'Job not found' })
+        }
+        
+        res.json({
+            job_id: job.id,
+            status: job.status,
+            result_url: job.result_url || null,
+            cost_credits: job.cost_credits || 0,
+            error_message: job.error_message || null,
+            created_at: job.created_at,
+            updated_at: job.updated_at
+        })
+    } catch (e) {
+        logger.error({ msg: 'status_error', error: String(e) })
+        res.status(500).json({ error: 'status_check_failed', message: 'Failed to retrieve job status' })
     }
-    const current = db.prepare('SELECT * FROM jobs WHERE id=?').get(row.id)
-    res.json({ job_id: current.id, status: current.status })
 })
 
 const port = process.env.PORT || 3000
