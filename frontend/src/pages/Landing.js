@@ -33,8 +33,8 @@ export default function Landing() {
                     </Link>
                 </div>
                 <div className="mt-4">
-                    <TelegramLoginButton 
-                        botName={process.env.REACT_APP_TELEGRAM_BOT_NAME || "ImMoreThanJustSomeBot"} 
+                    <TelegramLoginButton
+                        botName={process.env.REACT_APP_TELEGRAM_BOT_NAME || "ImMoreThanJustSomeBot"}
                         onAuth={handleTelegramAuth}
                     />
                 </div>

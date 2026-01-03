@@ -6,4 +6,3 @@ const packs = [
 ]
 
 module.exports = { packs }
-
