@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: telegram-a2e-web
+    name: FaceShot-ChopShop-web
     env: node
     plan: free
     buildCommand: "cd frontend && yarn install && yarn build"

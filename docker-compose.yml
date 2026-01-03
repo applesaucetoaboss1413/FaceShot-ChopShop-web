@@ -3,7 +3,7 @@ version: '3.8'
 services:
   app:
     build: .
-    container_name: telegram-a2e-web
+    container_name: faceshot-chopshop
     restart: always
     ports:
       - "3000:3000"

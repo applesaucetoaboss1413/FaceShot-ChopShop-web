@@ -14,7 +14,7 @@ This guide explains how to deploy the Telegram A2E Web App using Docker.
 1. **Clone the repository:**
    ```bash
    git clone <repository_url>
-   cd telegram-a2e-web
+   cd faceshot-chopshop
    ```
 
 2. **Configure Environment Variables:**
