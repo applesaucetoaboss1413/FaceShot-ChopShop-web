@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import Create from './pages/Create';
 import Status from './pages/Status';
 import FAQs from './pages/FAQs';
+import Auth from './pages/Auth';
 
 function App() {
     return (
@@ -23,6 +24,8 @@ function App() {
                             <Route path="/create" element={<Create />} />
                             <Route path="/status" element={<Status />} />
                             <Route path="/faqs" element={<FAQs />} />
+                            <Route path="/login" element={<Auth type="login" />} />
+                            <Route path="/signup" element={<Auth type="signup" />} />
                         </Routes>
                     </main>
                 </div>

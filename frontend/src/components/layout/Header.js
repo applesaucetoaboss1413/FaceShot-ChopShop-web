@@ -15,7 +15,7 @@ export function Header() {
 
     return (
         <header className="border-b p-4 flex justify-between items-center bg-white">
-            <Link to="/" className="text-xl font-bold">A2E Web</Link>
+            <Link to="/" className="text-xl font-bold">FaceShot-ChopShop</Link>
             <nav className="flex gap-4 items-center">
                 <Link to="/pricing" className="hover:underline">Pricing</Link>
                 <Link to="/faqs" className="hover:underline">FAQs</Link>
@@ -29,7 +29,10 @@ export function Header() {
                         <button onClick={logout} className="text-red-500 hover:underline">Logout</button>
                     </>
                 ) : (
-                    <Link to="/" className="bg-blue-600 text-white px-4 py-2 rounded">Login</Link>
+                    <>
+                        <Link to="/login" className="hover:underline">Login</Link>
+                        <Link to="/signup" className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800">Sign Up</Link>
+                    </>
                 )}
             </nav>
         </header>

@@ -1,58 +1,46 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { login as apiLogin, signup as apiSignup, getMe } from './api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const stored = localStorage.getItem('telegram_user');
-        if (stored) {
-            setUser(JSON.parse(stored));
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            getMe()
+                .then(res => setUser(res.data))
+                .catch(() => localStorage.removeItem('auth_token'))
+                .finally(() => setLoading(false));
+        } else {
+            setLoading(false);
         }
     }, []);
 
-    const login = (telegramUser) => {
-        localStorage.setItem('telegram_user', JSON.stringify(telegramUser));
-        setUser(telegramUser);
+    const login = async (email, password) => {
+        const { data } = await apiLogin(email, password);
+        localStorage.setItem('auth_token', data.token);
+        setUser(data.user);
+    };
+
+    const signup = async (email, password) => {
+        const { data } = await apiSignup(email, password);
+        localStorage.setItem('auth_token', data.token);
+        setUser(data.user);
     };
 
     const logout = () => {
-        localStorage.removeItem('telegram_user');
+        localStorage.removeItem('auth_token');
         setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout }}>
+        <AuthContext.Provider value={{ user, login, signup, logout, loading }}>
             {children}
         </AuthContext.Provider>
     );
 };
 
 export const useAuth = () => useContext(AuthContext);
-
-export const TelegramLoginButton = ({ botName }) => {
-    const { login } = useAuth();
-
-    useEffect(() => {
-        window.onTelegramAuth = (user) => {
-            login(user);
-        };
-
-        const script = document.createElement('script');
-        script.src = 'https://telegram.org/js/telegram-widget.js?22';
-        script.setAttribute('data-telegram-login', botName);
-        script.setAttribute('data-size', 'large');
-        script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-        script.setAttribute('data-request-access', 'write');
-        script.async = true;
-
-        const container = document.getElementById('telegram-login-container');
-        if (container) {
-            container.innerHTML = '';
-            container.appendChild(script);
-        }
-    }, [botName, login]);
-
-    return <div id="telegram-login-container" />;
-};

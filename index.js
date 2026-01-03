@@ -30,7 +30,17 @@ app.use(express.json({
 }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }))
-app.use(helmet())
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org"],
+            frameSrc: ["'self'", "https://oauth.telegram.org"],
+            imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
+            connectSrc: ["'self'"],
+        },
+    },
+}))
 
 const rateLimitMap = new Map()
 const RATE_LIMIT_WINDOW = 15 * 60 * 1000
@@ -71,6 +81,51 @@ const limiter = (req, res, next) => {
     data.count++
     next()
 }
+
+app.post('/webhook/stripe', async (req, res) => {
+    const sig = req.headers['stripe-signature']
+    let event
+
+    try {
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET)
+    } catch (err) {
+        return res.status(400).send(`Webhook Error: ${err.message}`)
+    }
+
+    if (event.type === 'checkout.session.completed') {
+        const session = event.data.object
+        const { user_id, points, pack_type, source } = session.metadata || {}
+
+        if (source === 'web' && user_id) {
+            try {
+                // Add purchase record
+                db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)').run(
+                    user_id, 
+                    pack_type, 
+                    Number(points), 
+                    session.amount_total, 
+                    new Date().toISOString()
+                )
+                
+                // Update user credits
+                const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(user_id)
+                const newBalance = (current ? current.balance : 0) + Number(points)
+                
+                if (current) {
+                    db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, user_id)
+                } else {
+                    db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(user_id, newBalance)
+                }
+                
+                logger.info({ msg: 'payment_success', user_id, points })
+            } catch (e) {
+                logger.error({ msg: 'payment_db_error', error: String(e) })
+            }
+        }
+    }
+
+    res.json({ received: true })
+})
 
 app.use(limiter)
 
@@ -127,18 +182,18 @@ app.get('/api/web/packs', (req, res) => {
     res.json(packsConfig.packs)
 })
 
-app.post('/api/web/checkout', async (req, res) => {
+app.post('/api/web/checkout', authenticateToken, async (req, res) => {
     try {
         if (!stripe) return res.status(400).json({ error: 'stripe_not_configured' })
-        const { pack_type, telegram_user_id } = req.body || {}
+        const { pack_type } = req.body || {}
         const pack = packsConfig.packs.find(p => p.type === pack_type)
         if (!pack) return res.status(400).json({ error: 'invalid_pack' })
         const successUrl = `${process.env.FRONTEND_URL}/status?session_id={CHECKOUT_SESSION_ID}`
         const cancelUrl = `${process.env.FRONTEND_URL}/pricing`
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
-            client_reference_id: telegram_user_id || undefined,
-            metadata: { points: String(pack.points), pack_type: pack.type, source: 'web' },
+            client_reference_id: String(req.user.id),
+            metadata: { points: String(pack.points), pack_type: pack.type, source: 'web', user_id: String(req.user.id) },
             line_items: [
                 {
                     price_data: {
@@ -159,41 +214,27 @@ app.post('/api/web/checkout', async (req, res) => {
     }
 })
 
-app.get('/api/miniapp/credits', (req, res) => {
-    const telegramUserId = req.query.telegram_user_id
-    if (!telegramUserId) return res.status(400).json({ error: 'missing_user' })
-    let user = db.prepare('SELECT * FROM users WHERE telegram_user_id=?').get(telegramUserId)
-    if (!user) {
-        db.prepare('INSERT INTO users (telegram_user_id) VALUES (?)').run(telegramUserId)
-        user = db.prepare('SELECT * FROM users WHERE telegram_user_id=?').get(telegramUserId)
-        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(user.id, 0)
-    }
-    const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(user.id)
+app.get('/api/web/credits', authenticateToken, (req, res) => {
+    const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
     res.json({ balance: creditRow ? creditRow.balance : 0 })
 })
 
-app.get('/api/miniapp/creations', (req, res) => {
-    const telegramUserId = req.query.telegram_user_id
-    if (!telegramUserId) return res.status(400).json({ error: 'missing_user' })
-    const user = db.prepare('SELECT * FROM users WHERE telegram_user_id=?').get(telegramUserId)
-    if (!user) return res.json({ items: [] })
-    const items = db.prepare('SELECT * FROM miniapp_creations WHERE user_id=? ORDER BY id DESC LIMIT 20').all(user.id)
+app.get('/api/web/creations', authenticateToken, (req, res) => {
+    const items = db.prepare('SELECT * FROM miniapp_creations WHERE user_id=? ORDER BY id DESC LIMIT 20').all(req.user.id)
     res.json({ items })
 })
 
-app.post('/api/miniapp/upload', upload.single('file'), async (req, res) => {
+app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req, res) => {
     try {
-        const telegramUserId = req.body.telegram_user_id
         const type = req.body.type
-        if (!telegramUserId || !type) return res.status(400).json({ error: 'invalid_payload' })
-        const user = db.prepare('SELECT * FROM users WHERE telegram_user_id=?').get(telegramUserId)
-        if (!user) return res.status(400).json({ error: 'unknown_user' })
+        if (!type) return res.status(400).json({ error: 'invalid_payload' })
+        
         let url = null
         if (req.file && cloudinary.config().cloud_name) {
             const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
             url = uploaded.secure_url
         }
-        db.prepare('INSERT INTO miniapp_creations (user_id, type, status, url, created_at) VALUES (?,?,?,?,?)').run(user.id, type, 'uploaded', url, new Date().toISOString())
+        db.prepare('INSERT INTO miniapp_creations (user_id, type, status, url, created_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'uploaded', url, new Date().toISOString())
         res.json({ status: 'uploaded', url })
     } catch (e) {
         logger.error({ msg: 'upload_error', error: String(e) })
@@ -201,14 +242,11 @@ app.post('/api/miniapp/upload', upload.single('file'), async (req, res) => {
     }
 })
 
-app.post('/api/miniapp/process', async (req, res) => {
+app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
-        const telegramUserId = req.body.telegram_user_id
         const type = req.body.type
-        if (!telegramUserId || !type) return res.status(400).json({ error: 'invalid_payload' })
-        const user = db.prepare('SELECT * FROM users WHERE telegram_user_id=?').get(telegramUserId)
-        if (!user) return res.status(400).json({ error: 'unknown_user' })
-        const job = db.prepare('INSERT INTO jobs (user_id, type, status, created_at, updated_at) VALUES (?,?,?,?,?)').run(user.id, type, 'processing', new Date().toISOString(), new Date().toISOString())
+        if (!type) return res.status(400).json({ error: 'invalid_payload' })
+        const job = db.prepare('INSERT INTO jobs (user_id, type, status, created_at, updated_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'processing', new Date().toISOString(), new Date().toISOString())
         res.json({ job_id: job.lastInsertRowid, status: 'processing' })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
@@ -216,7 +254,7 @@ app.post('/api/miniapp/process', async (req, res) => {
     }
 })
 
-app.get('/api/miniapp/status', (req, res) => {
+app.get('/api/web/status', (req, res) => {
     const id = req.query.id
     if (!id) return res.status(400).json({ error: 'missing_id' })
     const row = db.prepare('SELECT * FROM jobs WHERE id=?').get(Number(id))

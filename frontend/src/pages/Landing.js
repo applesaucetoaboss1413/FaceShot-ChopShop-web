@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { getStats } from '../lib/api';
-import { TelegramLoginButton, useAuth } from '../lib/auth';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
+import { useNavigate, Link } from 'react-router-dom';
+import TelegramLoginButton from '../components/TelegramLoginButton';
 
 export default function Landing() {
     const [stats, setStats] = useState(null);
@@ -13,15 +14,30 @@ export default function Landing() {
         if (user) navigate('/dashboard');
     }, [user, navigate]);
 
+    const handleTelegramAuth = (user) => {
+        console.log('Telegram auth:', user);
+        // TODO: Send to backend for verification and login
+    };
+
     return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-4">
-            <h1 className="text-4xl font-bold mb-4">AI Media Studio</h1>
+            <h1 className="text-4xl font-bold mb-4">FaceShot-ChopShop</h1>
             <p className="text-xl text-gray-600 mb-8">
-                Face Swap, Avatars, Image-to-Video and more directly from Telegram.
+                Face Swap, Avatars, Image-to-Video and more.
             </p>
 
-            <div className="mb-12">
-                <TelegramLoginButton botName="YourStagingBot" />
+            <div className="mb-12 flex flex-col gap-4 justify-center items-center">
+                <div className="flex gap-4">
+                    <Link to="/signup" className="bg-black text-white px-8 py-3 rounded-lg text-lg font-bold hover:bg-gray-800">
+                        Get Started
+                    </Link>
+                </div>
+                <div className="mt-4">
+                    <TelegramLoginButton 
+                        botName={process.env.REACT_APP_TELEGRAM_BOT_NAME || "ImMoreThanJustSomeBot"} 
+                        onAuth={handleTelegramAuth}
+                    />
+                </div>
             </div>
 
             {stats && (

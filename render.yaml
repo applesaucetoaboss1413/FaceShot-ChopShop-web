@@ -34,3 +34,7 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      - key: REACT_APP_TELEGRAM_BOT_NAME
+        sync: false
+      - key: REACT_APP_BACKEND_URL
+        sync: false
