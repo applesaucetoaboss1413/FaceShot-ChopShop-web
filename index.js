@@ -8,6 +8,7 @@ const Stripe = require('stripe')
 const cloudinary = require('cloudinary').v2
 const axios = require('axios')
 const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs')
 const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
@@ -158,10 +159,10 @@ const upload = multer({ storage: multer.memoryStorage() })
 
 const db = new Database(process.env.DB_PATH || 'production.db')
 db.exec(
-    `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE);
+    `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, first_name TEXT, created_at TEXT);
    CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, created_at TEXT, updated_at TEXT);
+   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, a2e_task_id TEXT, result_url TEXT, error_message TEXT, cost_credits INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
    CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
    CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);`
 )
@@ -188,6 +189,98 @@ app.get('/stats', (req, res) => {
     const revenueCents = db.prepare('SELECT COALESCE(SUM(amount_cents),0) AS s FROM purchases').get().s
     const conversionRate = totalUsers ? Math.round((payingUsers / totalUsers) * 100) : 0
     res.json({ videos, paying_users: payingUsers, total_users: totalUsers, conversion_rate: conversionRate, revenue_cents: revenueCents })
+})
+
+app.post('/api/auth/signup', async (req, res) => {
+    try {
+        const { email, password } = req.body
+        if (!email || !password) {
+            return res.status(400).json({ error: 'invalid_email' })
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: 'invalid_email' })
+        }
+        
+        if (password.length < 6) {
+            return res.status(400).json({ error: 'password_too_short' })
+        }
+        
+        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+        if (existing) {
+            return res.status(409).json({ error: 'email_exists' })
+        }
+        
+        const passwordHash = await bcrypt.hash(password, 10)
+        const result = db.prepare('INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)').run(
+            email, 
+            passwordHash, 
+            new Date().toISOString()
+        )
+        
+        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(result.lastInsertRowid, 0)
+        
+        const token = jwt.sign({ id: result.lastInsertRowid }, process.env.SESSION_SECRET, { expiresIn: '30d' })
+        
+        res.status(201).json({
+            token,
+            user: {
+                id: result.lastInsertRowid,
+                email,
+                first_name: null
+            }
+        })
+    } catch (e) {
+        logger.error({ msg: 'signup_error', error: String(e) })
+        res.status(500).json({ error: 'signup_failed' })
+    }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body
+        if (!email || !password) {
+            return res.status(401).json({ error: 'invalid_credentials' })
+        }
+        
+        const user = db.prepare('SELECT id, email, password_hash, first_name FROM users WHERE email = ?').get(email)
+        if (!user || !user.password_hash) {
+            return res.status(401).json({ error: 'invalid_credentials' })
+        }
+        
+        const valid = await bcrypt.compare(password, user.password_hash)
+        if (!valid) {
+            return res.status(401).json({ error: 'invalid_credentials' })
+        }
+        
+        const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
+        
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                first_name: user.first_name
+            }
+        })
+    } catch (e) {
+        logger.error({ msg: 'login_error', error: String(e) })
+        res.status(500).json({ error: 'login_failed' })
+    }
+})
+
+app.get('/api/auth/me', authenticateToken, (req, res) => {
+    try {
+        const user = db.prepare('SELECT id, email, first_name FROM users WHERE id = ?').get(req.user.id)
+        if (!user) {
+            return res.status(401).json({ error: 'unauthorized' })
+        }
+        res.json(user)
+    } catch (e) {
+        logger.error({ msg: 'auth_me_error', error: String(e) })
+        res.status(500).json({ error: 'auth_failed' })
+    }
 })
 
 app.get('/api/web/catalog', (req, res) => {
