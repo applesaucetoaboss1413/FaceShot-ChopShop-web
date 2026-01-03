@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide explains how to deploy the Telegram A2E Web App using Docker.
+This guide explains how to deploy the FaceShot-ChopShop Web App using Docker.
 
 ## Prerequisites
 
