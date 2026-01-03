@@ -198,6 +198,57 @@ const A2EService = require('./services/a2e')
 
 const pollingJobs = new Map()
 
+function startStatusPolling(jobId, type, a2eTaskId) {
+    const pollInterval = setInterval(async () => {
+        try {
+            const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+            const status = await a2eService.getTaskStatus(type, a2eTaskId)
+            
+            if (!status || !status.data) {
+                logger.error({ msg: 'polling_invalid_response', jobId, type, a2eTaskId })
+                return
+            }
+            
+            const currentStatus = status.data.current_status || status.data.status
+            
+            if (currentStatus === 'completed' || currentStatus === 'success') {
+                const resultUrl = status.data.result_url || status.data.video_url || status.data.media_url || ''
+                
+                db.prepare(`
+                    UPDATE jobs 
+                    SET status='completed', result_url=?, updated_at=? 
+                    WHERE id=?
+                `).run(resultUrl, new Date().toISOString(), jobId)
+                
+                clearInterval(pollInterval)
+                pollingJobs.delete(jobId)
+                logger.info({ msg: 'job_completed', jobId, resultUrl })
+            } else if (currentStatus === 'failed' || currentStatus === 'error') {
+                const errorMessage = status.data.failed_message || status.data.error_message || 'Unknown error'
+                
+                const job = db.prepare('SELECT user_id, cost_credits FROM jobs WHERE id=?').get(jobId)
+                if (job && job.cost_credits > 0) {
+                    db.prepare('UPDATE user_credits SET balance = balance + ? WHERE user_id = ?').run(job.cost_credits, job.user_id)
+                }
+                
+                db.prepare(`
+                    UPDATE jobs 
+                    SET status='failed', error_message=?, updated_at=? 
+                    WHERE id=?
+                `).run(errorMessage, new Date().toISOString(), jobId)
+                
+                clearInterval(pollInterval)
+                pollingJobs.delete(jobId)
+                logger.error({ msg: 'job_failed', jobId, errorMessage })
+            }
+        } catch (error) {
+            logger.error({ msg: 'polling_error', jobId, error: String(error) })
+        }
+    }, 10000)
+    
+    pollingJobs.set(jobId, pollInterval)
+}
+
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' })
 })

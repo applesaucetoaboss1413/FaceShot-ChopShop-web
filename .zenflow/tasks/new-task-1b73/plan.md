@@ -50,7 +50,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step 1: Database Schema Updates and Authentication Backend
+### [x] Step 1: Database Schema Updates and Authentication Backend
 <!-- chat-id: c952921e-2180-4488-9732-11338fe8e738 -->
 
 **Objective**: Implement the authentication system foundation
@@ -70,7 +70,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step 2: A2E Service Integration
+### [x] Step 2: A2E Service Integration
 <!-- chat-id: 37e74846-a830-4402-ac1f-0ed6efa6a806 -->
 
 **Objective**: Create A2E API client service and integrate with catalog types
@@ -138,7 +138,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [ ] Step 5: Frontend Updates
+### [x] Step 5: Frontend Updates
 <!-- chat-id: 94f6714a-f2b2-4b8b-856b-440982d1481f -->
 
 **Objective**: Remove Telegram login and update UI for email authentication
