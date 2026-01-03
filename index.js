@@ -204,6 +204,44 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
             const status = await a2eService.getTaskStatus(type, a2eTaskId)
             
+            if (status.data && status.data.current_status === 'completed') {
+                db.prepare(`
+                    UPDATE jobs 
+                    SET status='completed', result_url=?, updated_at=? 
+                    WHERE id=?
+                `).run(status.data.result_url, new Date().toISOString(), jobId)
+                
+                clearInterval(pollInterval)
+                pollingJobs.delete(jobId)
+                logger.info({ msg: 'job_completed', jobId, a2eTaskId })
+            } else if (status.data && status.data.current_status === 'failed') {
+                db.prepare(`
+                    UPDATE jobs 
+                    SET status='failed', error_message=?, updated_at=? 
+                    WHERE id=?
+                `).run(status.data.failed_message || 'A2E task failed', new Date().toISOString(), jobId)
+                
+                clearInterval(pollInterval)
+                pollingJobs.delete(jobId)
+                logger.error({ msg: 'job_failed', jobId, a2eTaskId })
+            }
+        } catch (error) {
+            logger.error({ msg: 'polling_error', jobId, error: String(error) })
+        }
+    }, 10000)
+    
+    pollingJobs.set(jobId, pollInterval)
+}
+const A2EService = require('./services/a2e')
+
+const pollingJobs = new Map()
+
+function startStatusPolling(jobId, type, a2eTaskId) {
+    const pollInterval = setInterval(async () => {
+        try {
+            const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+            const status = await a2eService.getTaskStatus(type, a2eTaskId)
+            
             if (!status || !status.data) {
                 logger.error({ msg: 'polling_invalid_response', jobId, type, a2eTaskId })
                 return
