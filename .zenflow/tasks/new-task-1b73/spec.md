@@ -1,721 +1,843 @@
-# Technical Specification: A2E Dual-Purpose Platform
+# Technical Specification: Phase 1 - Pricing & Plan System
 
 ## Task Complexity Assessment
 
 **Difficulty: Hard**
 
-This is a complex implementation requiring:
-- Backend authentication system implementation (missing endpoints)
-- Third-party API integration (A2E) with async processing
-- Webhook/polling mechanism for job status updates
-- Database schema updates
-- Frontend cleanup and refactoring
-- Deployment configuration updates
-- Multiple architectural considerations for production readiness
+This is Phase 1 of adding an enterprise pricing and subscription system to the existing FaceShot-ChopShop platform. The system will layer a sophisticated pricing engine on top of the already-implemented auth and A2E API integration.
 
 ## Technical Context
+
+### Current State
+- ✅ Auth endpoints implemented (signup, login, /api/auth/me)
+- ✅ A2E API integration via `services/a2e.js`
+- ✅ Background job polling for task status
+- ✅ Credit system with transactions
+- ✅ Stripe checkout for credit packs
+- ✅ Frontend with Create page, prompt inputs
 
 ### Language & Runtime
 - **Backend**: Node.js (>=20.0.0), Express.js
 - **Frontend**: React 19.2.3 with React Router 7.11.0
-- **Database**: SQLite (better-sqlite3)
+- **Database**: SQLite (better-sqlite3) - staying with SQLite for Phase 1
 - **Build Tools**: react-scripts (CRA), craco
 - **Styling**: Tailwind CSS 3.4.17
 
-### Dependencies
-**Backend:**
-- `express` ^4.19.2 - Web framework
-- `better-sqlite3` ^9.4.3 - SQLite database
-- `stripe` ^14.0.0 - Payment processing
-- `cloudinary` ^2.5.1 - Media storage
-- `jsonwebtoken` ^9.0.2 - JWT authentication
+### Dependencies (existing)
+- `better-sqlite3` ^9.4.3 - Database
+- `stripe` ^14.0.0 - Payments
+- `jsonwebtoken` ^9.0.2 - Auth
 - `bcryptjs` ^2.4.3 - Password hashing
-- `axios` ^1.7.7 - HTTP client (for A2E API)
-- `multer` ^1.4.5-lts.1 - File uploads
-- `helmet` ^7.1.0, `cors` ^2.8.5 - Security
+- `axios` ^1.7.7 - HTTP client
 
-**Frontend:**
-- `axios` ^1.13.2 - API client
-- `react-router-dom` ^7.11.0 - Routing
-- `tailwindcss` ^3.4.17 - Styling
-
-### Environment Variables Required
-```
-# Core
-NODE_ENV=production
-PORT=10000
-SESSION_SECRET=<generated>
-DB_PATH=production.db
-
-# A2E API
-A2E_API_KEY=<user's subscription key>
-A2E_BASE_URL=https://video.a2e.ai
-
-# Stripe
-STRIPE_SECRET_KEY=<stripe key>
-STRIPE_WEBHOOK_SECRET=<stripe webhook secret>
-
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=<cloudinary name>
-CLOUDINARY_API_KEY=<cloudinary key>
-CLOUDINARY_API_SECRET=<cloudinary secret>
-
-# URLs
-FRONTEND_URL=https://faceshot-chopshop-1.onrender.com
-REACT_APP_BACKEND_URL=<empty for production, relative paths>
+### New Environment Variables
+```env
+# Pricing Constants
+COST_PER_CREDIT=0.0111
+MIN_MARGIN=0.40
+MAX_JOB_SECONDS=5000
 ```
 
-## Problem Analysis
+## Phase 1 Scope
 
-### Current Issues
+### What We're Building
+1. **Pricing Engine** - Core service to calculate quotes based on plans, SKUs, and flags
+2. **Subscription System** - User plans with included seconds and overage rates
+3. **SKU System** - Product catalog with base credits and prices
+4. **Flag System** - Price modifiers (Rapid, Custom, etc.)
+5. **Usage Tracking** - Per-plan-period usage tracking in seconds
+6. **Integration** - Wire pricing into existing Create flow
 
-1. **Missing Authentication Endpoints** (Critical)
-   - Frontend expects: `/api/auth/signup`, `/api/auth/login`, `/api/auth/me`
-   - Backend has: None of these routes implemented
-   - Current: JWT middleware exists but no way to issue tokens
+### What We're NOT Building (Yet)
+- ❌ Multiple creation screens (Images, Video, Voice, Text) - only extending existing Create page
+- ❌ Full admin panel - seeding via SQL scripts is sufficient
+- ❌ All 7 vectors and 20+ SKUs - starting with 3 SKUs only
+- ❌ PostgreSQL migration - staying with SQLite
+- ❌ License flag implementation (L_STD, L_EXT, L_EXCL) - deferred to Phase 2
 
-2. **API Connectivity Issue** (Critical)
-   - Frontend: `baseURL: process.env.REACT_APP_BACKEND_URL || ''`
-   - In production, uses relative paths (correct)
-   - In development, needs explicit backend URL
-   - **Root cause**: Missing auth endpoints, not baseURL configuration
+## Data Model
 
-3. **A2E API Integration** (Critical)
-   - Current `/api/web/process` only creates DB entry, doesn't call A2E
-   - No service layer for A2E API communication
-   - No status polling/webhook mechanism
-   - No mapping between catalog items and A2E endpoints
+### New Tables
 
-4. **Telegram Login Buttons** (Low)
-   - `TelegramLoginButton` component on Landing page (line 36-40)
-   - No backend support for Telegram auth (intentional)
-   - Should be removed per requirements
-
-5. **Deployment Configuration** (Medium)
-   - `render.yaml` uses `npm ci` which is strict about package-lock.json
-   - Should use `npm install` for more flexible deployments
-   - Current buildCommand: `npm ci && cd frontend && npm ci && npm run build`
-
-6. **Database Schema** (Medium)
-   - Current `jobs` table lacks fields for A2E task tracking:
-     - `a2e_task_id` - A2E's task identifier
-     - `result_url` - URL to completed media
-     - `error_message` - Error details if failed
-     - `cost_credits` - Credits consumed
-
-## Implementation Approach
-
-### 1. Authentication System Implementation
-
-**New Backend Routes:**
-
-```javascript
-// POST /api/auth/signup
-// - Validate email/password
-// - Hash password with bcryptjs
-// - Insert into users table (add email, password_hash fields)
-// - Initialize user_credits entry
-// - Generate JWT token
-// - Return { token, user }
-
-// POST /api/auth/login
-// - Validate email/password
-// - Compare password hash
-// - Generate JWT token
-// - Return { token, user }
-
-// GET /api/auth/me
-// - Use existing authenticateToken middleware
-// - Fetch user from database by id
-// - Return user object
-```
-
-**Database Schema Updates:**
+#### 1. `plans`
 ```sql
--- Add email auth to users table
-ALTER TABLE users ADD COLUMN email TEXT UNIQUE;
-ALTER TABLE users ADD COLUMN password_hash TEXT;
-ALTER TABLE users ADD COLUMN first_name TEXT;
-ALTER TABLE users ADD COLUMN created_at TEXT;
+CREATE TABLE IF NOT EXISTS plans (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  monthly_price_cents INTEGER NOT NULL,
+  included_seconds INTEGER NOT NULL,
+  overage_rate_per_second_cents INTEGER NOT NULL,
+  description TEXT,
+  active INTEGER DEFAULT 1,
+  created_at TEXT NOT NULL
+);
 ```
 
-### 2. A2E API Integration
-
-**New Backend Service: `services/a2e.js`**
-
+**Seed Data (Phase 1):**
 ```javascript
-class A2EService {
-  constructor(apiKey, baseURL) {}
-  
-  // Map catalog types to A2E endpoints
-  async startTask(type, mediaUrl, options) {
-    switch(type) {
-      case 'faceswap':
-        return this.startFaceSwap(mediaUrl, options);
-      case 'img2vid':
-        return this.startImage2Video(mediaUrl, options);
-      case 'enhance':
-        return this.startEnhancement(mediaUrl);
-      case 'bgremove':
-        return this.startBackgroundRemoval(mediaUrl);
-      case 'avatar':
-        return this.startAvatarCreation(mediaUrl);
-    }
-  }
-  
-  async getTaskStatus(type, taskId) {}
-  
-  // A2E-specific implementations
-  private async startFaceSwap(faceUrl, videoUrl) {
-    // POST /api/v1/userFaceSwapTask/add
-  }
-  
-  private async startImage2Video(imageUrl, prompt) {
-    // POST /api/v1/userImage2Video/start
-  }
-  
-  // ... other A2E endpoints
-}
-```
-
-**A2E API Endpoints Mapping:**
-
-| Catalog Type | A2E Endpoint | Method | Required Fields |
-|-------------|--------------|--------|----------------|
-| faceswap | `/api/v1/userFaceSwapTask/add` | POST | `face_url`, `video_url`, `name` |
-| img2vid | `/api/v1/userImage2Video/start` | POST | `image_url`, `name`, `prompt`, `negative_prompt` |
-| enhance | TBD (use watermark as placeholder) | POST | `media_url` |
-| bgremove | TBD (use matting API) | POST | `media_url` |
-| avatar | `/api/v1/userAvatar/create` | POST | `image_url` or `video_url` |
-
-**Status Polling:**
-- A2E tasks are async, return `current_status: "initialized"` or `"sent"`
-- Need to poll status endpoints until `current_status: "completed"`
-- Implement background polling with setInterval
-- Update SQLite `jobs` table when completed
-
-**Cost Tracking:**
-- A2E returns `coins` field indicating cost
-- Deduct from `user_credits` when task starts
-- Refund if task fails
-
-### 3. Updated `/api/web/process` Route
-
-```javascript
-app.post('/api/web/process', authenticateToken, async (req, res) => {
-  const { type, options } = req.body;
-  const userId = req.user.id;
-  
-  // 1. Check user credits
-  const credits = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(userId);
-  if (!credits || credits.balance < 10) {
-    return res.status(402).json({ error: 'insufficient_credits' });
-  }
-  
-  // 2. Get uploaded media URL from miniapp_creations
-  const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(userId, type);
-  if (!upload || !upload.url) {
-    return res.status(400).json({ error: 'no_media_uploaded' });
-  }
-  
-  // 3. Start A2E task
-  const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL);
-  const a2eResponse = await a2eService.startTask(type, upload.url, options);
-  
-  // 4. Create job record
-  const job = db.prepare(`
-    INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, created_at, updated_at) 
-    VALUES (?,?,?,?,?,?,?)
-  `).run(userId, type, 'processing', a2eResponse.data._id, a2eResponse.data.coins, new Date().toISOString(), new Date().toISOString());
-  
-  // 5. Deduct credits
-  db.prepare('UPDATE user_credits SET balance = balance - ? WHERE user_id = ?').run(a2eResponse.data.coins, userId);
-  
-  // 6. Start background polling
-  startStatusPolling(job.lastInsertRowid, type, a2eResponse.data._id);
-  
-  res.json({ job_id: job.lastInsertRowid, status: 'processing' });
-});
-```
-
-### 4. Background Polling Implementation
-
-```javascript
-// In-memory map to track polling intervals
-const pollingJobs = new Map();
-
-function startStatusPolling(jobId, type, a2eTaskId) {
-  const pollInterval = setInterval(async () => {
-    try {
-      const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL);
-      const status = await a2eService.getTaskStatus(type, a2eTaskId);
-      
-      if (status.data.current_status === 'completed') {
-        db.prepare(`
-          UPDATE jobs 
-          SET status='completed', result_url=?, updated_at=? 
-          WHERE id=?
-        `).run(status.data.result_url, new Date().toISOString(), jobId);
-        
-        clearInterval(pollInterval);
-        pollingJobs.delete(jobId);
-      } else if (status.data.current_status === 'failed') {
-        db.prepare(`
-          UPDATE jobs 
-          SET status='failed', error_message=?, updated_at=? 
-          WHERE id=?
-        `).run(status.data.failed_message, new Date().toISOString(), jobId);
-        
-        clearInterval(pollInterval);
-        pollingJobs.delete(jobId);
-      }
-    } catch (error) {
-      logger.error({ msg: 'polling_error', jobId, error: String(error) });
-    }
-  }, 10000); // Poll every 10 seconds
-  
-  pollingJobs.set(jobId, pollInterval);
-}
-```
-
-### 5. Frontend Cleanup
-
-**Remove Telegram Login:**
-- `frontend/src/pages/Landing.js` lines 36-40: Remove `TelegramLoginButton`
-- `frontend/src/components/TelegramLoginButton.js`: Can remain (unused, no harm)
-- Update FAQ in `frontend/src/pages/FAQs.js` line 14: Remove Telegram reference
-
-**Update Dashboard:**
-- `frontend/src/pages/Dashboard.js` line 25: Change `user.first_name` to `user.email` (since we're using email auth now)
-
-### 6. Deployment Configuration Updates
-
-**Update `render.yaml`:**
-```yaml
-buildCommand: "npm install && cd frontend && npm install && npm run build"
-```
-
-**Update `package.json` (root):**
-```json
 {
-  "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=10.0.0"
-  }
+  id: 'plan_pro',
+  code: 'PRO',
+  name: 'Pro',
+  monthly_price_cents: 7999, // $79.99
+  included_seconds: 3000,
+  overage_rate_per_second_cents: 15, // $0.15
+  description: 'Professional plan with 3000 seconds included',
+  active: 1
 }
 ```
 
-## Source Code Structure Changes
-
-### New Files
-
-1. **`services/a2e.js`** - A2E API client service
-   - `A2EService` class
-   - Methods for each catalog type
-   - Status polling logic
-   - Error handling
-
-2. **`routes/auth.js`** - Authentication routes (optional, can be in index.js)
-   - POST `/api/auth/signup`
-   - POST `/api/auth/login`
-   - GET `/api/auth/me`
-
-### Modified Files
-
-1. **`index.js`** (Backend)
-   - Add auth routes
-   - Update database schema initialization
-   - Import A2E service
-   - Update `/api/web/process` route
-   - Add polling mechanism
-   - Update `/api/web/status` to return result_url
-
-2. **`frontend/src/pages/Landing.js`**
-   - Remove TelegramLoginButton (lines 36-40)
-
-3. **`frontend/src/pages/Dashboard.js`**
-   - Change `user.first_name` to `user.email` (line 25)
-
-4. **`frontend/src/pages/FAQs.js`**
-   - Update Telegram reference (line 14)
-
-5. **`frontend/src/pages/Create.js`**
-   - Add options input fields for img2vid (prompt, negative_prompt)
-   - Pass options to processJob
-
-6. **`render.yaml`**
-   - Update buildCommand to use `npm install`
-
-7. **`package.json`** (root)
-   - Add npm version to engines
-
-## Data Model Changes
-
-### Database Schema Updates
-
+#### 2. `skus`
 ```sql
--- Users table modifications
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY,
-  telegram_user_id TEXT UNIQUE,
-  email TEXT UNIQUE,
-  password_hash TEXT,
-  first_name TEXT,
-  created_at TEXT
+CREATE TABLE IF NOT EXISTS skus (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  base_credits INTEGER NOT NULL,
+  base_price_cents INTEGER NOT NULL,
+  default_flags TEXT DEFAULT '[]',
+  description TEXT,
+  active INTEGER DEFAULT 1,
+  created_at TEXT NOT NULL
 );
-
--- Jobs table modifications
-CREATE TABLE IF NOT EXISTS jobs (
-  id INTEGER PRIMARY KEY,
-  user_id INTEGER,
-  type TEXT,
-  status TEXT,
-  a2e_task_id TEXT,
-  result_url TEXT,
-  error_message TEXT,
-  cost_credits INTEGER DEFAULT 0,
-  created_at TEXT,
-  updated_at TEXT
-);
-
--- Keep existing: user_credits, purchases, analytics_events, miniapp_creations
 ```
 
-**Migration Strategy:**
-- SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS
-- Use defensive schema updates: check if column exists before adding
-- Backwards compatible: telegram_user_id can coexist with email
+**Seed Data (Phase 1):**
+```javascript
+[
+  {
+    id: 'sku_c2_30',
+    code: 'C2-30',
+    name: '30s Ad/UGC Clip',
+    base_credits: 180,
+    base_price_cents: 5900, // $59.00
+    default_flags: '[]',
+    description: '30-second promotional video or user-generated content clip'
+  },
+  {
+    id: 'sku_a1_ig',
+    code: 'A1-IG',
+    name: 'Instagram Image 1080p',
+    base_credits: 60,
+    base_price_cents: 499, // $4.99
+    default_flags: '[]',
+    description: 'Social media ready image for Instagram'
+  },
+  {
+    id: 'sku_b1_30soc',
+    code: 'B1-30SOC',
+    name: '30 Social Creatives',
+    base_credits: 1800,
+    base_price_cents: 7900, // $79.00
+    default_flags: '["B"]',
+    description: 'Bundle of 30 social media images'
+  }
+]
+```
 
-## API Contract Changes
+#### 3. `flags`
+```sql
+CREATE TABLE IF NOT EXISTS flags (
+  id TEXT PRIMARY KEY,
+  code TEXT UNIQUE NOT NULL,
+  label TEXT NOT NULL,
+  price_multiplier REAL DEFAULT 1.0,
+  price_add_flat_cents INTEGER DEFAULT 0,
+  description TEXT,
+  active INTEGER DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+```
+
+**Seed Data (Phase 1):**
+```javascript
+[
+  {
+    id: 'flag_r',
+    code: 'R',
+    label: 'Rapid (same-day)',
+    price_multiplier: 1.4,
+    price_add_flat_cents: 0,
+    description: 'Priority processing for same-day delivery',
+    active: 1
+  },
+  {
+    id: 'flag_c',
+    code: 'C',
+    label: 'Custom (brand style)',
+    price_multiplier: 1.0,
+    price_add_flat_cents: 9900, // $99.00
+    description: 'Custom branding, avatar, or voice',
+    active: 1
+  },
+  {
+    id: 'flag_b',
+    code: 'B',
+    label: 'Batch discount',
+    price_multiplier: 0.85,
+    price_add_flat_cents: 0,
+    description: 'Automatic batch discount for 10+ items',
+    active: 1
+  }
+]
+```
+
+#### 4. `user_plans`
+```sql
+CREATE TABLE IF NOT EXISTS user_plans (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  plan_id TEXT NOT NULL,
+  start_date TEXT NOT NULL,
+  end_date TEXT,
+  auto_renew INTEGER DEFAULT 1,
+  stripe_subscription_id TEXT,
+  status TEXT DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (plan_id) REFERENCES plans(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_plans_user_id ON user_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_plans_status ON user_plans(status);
+```
+
+#### 5. `plan_usage`
+```sql
+CREATE TABLE IF NOT EXISTS plan_usage (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  plan_id TEXT NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  seconds_used INTEGER DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (plan_id) REFERENCES plans(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_usage_user_period ON plan_usage(user_id, period_start, period_end);
+```
+
+#### 6. `orders`
+```sql
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  sku_code TEXT NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  applied_flags TEXT DEFAULT '[]',
+  customer_price_cents INTEGER NOT NULL,
+  internal_cost_cents INTEGER NOT NULL,
+  margin_percent REAL NOT NULL,
+  total_seconds INTEGER NOT NULL,
+  overage_seconds INTEGER DEFAULT 0,
+  stripe_payment_intent_id TEXT,
+  status TEXT DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+```
+
+### Modified Tables
+
+#### Update `jobs` table
+Already has necessary fields:
+- `a2e_task_id` - A2E task identifier
+- `cost_credits` - Credits consumed
+- `result_url` - Completed media URL
+
+**Add new field:**
+```sql
+ALTER TABLE jobs ADD COLUMN order_id INTEGER;
+```
+
+## Pricing Engine Implementation
+
+### Core Service: `services/pricing.js`
+
+```javascript
+class PricingEngine {
+  constructor(db) {
+    this.db = db;
+    this.COST_PER_CREDIT = Number(process.env.COST_PER_CREDIT || 0.0111);
+    this.MIN_MARGIN = Number(process.env.MIN_MARGIN || 0.40);
+  }
+
+  /**
+   * Generate a price quote for a user
+   * @param {number} userId 
+   * @param {string} skuCode 
+   * @param {number} quantity 
+   * @param {string[]} appliedFlags 
+   * @returns {Promise<PriceQuote>}
+   */
+  async quote(userId, skuCode, quantity = 1, appliedFlags = []) {
+    // 1. Load SKU
+    const sku = this.db.prepare('SELECT * FROM skus WHERE code = ? AND active = 1').get(skuCode);
+    if (!sku) throw new Error('sku_not_found');
+
+    // 2. Load user's active plan (if any)
+    const userPlan = this.getUserActivePlan(userId);
+    
+    // 3. Get user's current period usage
+    let remainingSeconds = 0;
+    if (userPlan) {
+      const plan = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(userPlan.plan_id);
+      const usage = this.getCurrentPeriodUsage(userId, userPlan.plan_id);
+      remainingSeconds = plan.included_seconds - (usage ? usage.seconds_used : 0);
+      remainingSeconds = Math.max(0, remainingSeconds);
+    }
+
+    // 4. Calculate total credits/seconds
+    const totalCredits = sku.base_credits * quantity;
+    const totalSeconds = totalCredits; // 1 credit ≈ 1 second
+
+    // 5. Merge flags (SKU defaults + applied)
+    const defaultFlags = JSON.parse(sku.default_flags || '[]');
+    const allFlags = [...new Set([...defaultFlags, ...appliedFlags])];
+
+    // 6. Load flag definitions
+    const flagRecords = allFlags.length > 0 
+      ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${allFlags.map(() => '?').join(',')}) AND active = 1`).all(...allFlags)
+      : [];
+
+    // 7. Calculate base price
+    let price = sku.base_price_cents * quantity;
+
+    // 8. Apply flag modifiers
+    let totalMultiplier = 1.0;
+    let totalFlatAdd = 0;
+
+    for (const flag of flagRecords) {
+      if (flag.price_multiplier !== 1.0) {
+        totalMultiplier *= flag.price_multiplier;
+      }
+      if (flag.price_add_flat_cents > 0) {
+        totalFlatAdd += flag.price_add_flat_cents;
+      }
+    }
+
+    price = Math.round(price * totalMultiplier) + totalFlatAdd;
+
+    // 9. Calculate overage if user has plan
+    let secondsFromPlan = 0;
+    let overageSeconds = 0;
+    let overageCost = 0;
+
+    if (userPlan) {
+      const plan = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(userPlan.plan_id);
+      secondsFromPlan = Math.min(totalSeconds, remainingSeconds);
+      overageSeconds = Math.max(0, totalSeconds - remainingSeconds);
+      overageCost = overageSeconds * plan.overage_rate_per_second_cents;
+    }
+
+    const customerPrice = price + overageCost;
+
+    // 10. Calculate internal cost and margin
+    const internalCost = Math.round(totalCredits * this.COST_PER_CREDIT * 100); // in cents
+    const margin = (customerPrice - internalCost) / customerPrice;
+
+    // 11. Margin safety check
+    if (margin < this.MIN_MARGIN) {
+      throw new Error(`margin_too_low: ${(margin * 100).toFixed(1)}% < ${(this.MIN_MARGIN * 100)}%`);
+    }
+
+    return {
+      sku_code: skuCode,
+      sku_name: sku.name,
+      quantity,
+      applied_flags: allFlags,
+      customer_price_cents: customerPrice,
+      customer_price_usd: (customerPrice / 100).toFixed(2),
+      internal_cost_cents: internalCost,
+      internal_cost_usd: (internalCost / 100).toFixed(2),
+      margin_percent: (margin * 100).toFixed(1),
+      total_seconds: totalSeconds,
+      seconds_from_plan: secondsFromPlan,
+      overage_seconds: overageSeconds,
+      overage_cost_cents: overageCost,
+      overage_cost_usd: (overageCost / 100).toFixed(2),
+      remaining_plan_seconds: remainingSeconds
+    };
+  }
+
+  getUserActivePlan(userId) {
+    const now = new Date().toISOString();
+    return this.db.prepare(`
+      SELECT * FROM user_plans 
+      WHERE user_id = ? 
+        AND status = 'active' 
+        AND start_date <= ? 
+        AND (end_date IS NULL OR end_date > ?)
+      ORDER BY start_date DESC 
+      LIMIT 1
+    `).get(userId, now, now);
+  }
+
+  getCurrentPeriodUsage(userId, planId) {
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+    let usage = this.db.prepare(`
+      SELECT * FROM plan_usage 
+      WHERE user_id = ? 
+        AND plan_id = ? 
+        AND period_start = ? 
+        AND period_end = ?
+    `).get(userId, planId, periodStart, periodEnd);
+
+    if (!usage) {
+      // Create usage record for this period
+      this.db.prepare(`
+        INSERT INTO plan_usage (user_id, plan_id, period_start, period_end, seconds_used, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 0, ?, ?)
+      `).run(userId, planId, periodStart, periodEnd, now.toISOString(), now.toISOString());
+
+      usage = { user_id: userId, plan_id: planId, seconds_used: 0, period_start: periodStart, period_end: periodEnd };
+    }
+
+    return usage;
+  }
+
+  deductUsage(userId, planId, seconds) {
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+    const usage = this.getCurrentPeriodUsage(userId, planId);
+    
+    this.db.prepare(`
+      UPDATE plan_usage 
+      SET seconds_used = seconds_used + ?, updated_at = ?
+      WHERE user_id = ? AND plan_id = ? AND period_start = ? AND period_end = ?
+    `).run(seconds, now.toISOString(), userId, planId, periodStart, periodEnd);
+  }
+}
+
+module.exports = PricingEngine;
+```
+
+## API Endpoints
 
 ### New Endpoints
 
-**POST /api/auth/signup**
-```json
-Request:
-{
-  "email": "user@example.com",
-  "password": "securepassword123"
-}
-
-Response (201):
-{
-  "token": "eyJhbGc...",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "first_name": null
-  }
-}
-
-Errors:
-400 - { "error": "invalid_email" }
-409 - { "error": "email_exists" }
-```
-
-**POST /api/auth/login**
-```json
-Request:
-{
-  "email": "user@example.com",
-  "password": "securepassword123"
-}
-
-Response (200):
-{
-  "token": "eyJhbGc...",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "first_name": null
-  }
-}
-
-Errors:
-401 - { "error": "invalid_credentials" }
-```
-
-**GET /api/auth/me**
-```json
-Response (200):
-{
-  "id": 1,
-  "email": "user@example.com",
-  "first_name": null
-}
-
-Errors:
-401 - { "error": "unauthorized" }
-```
-
-### Updated Endpoints
-
-**POST /api/web/process**
-```json
-Request:
-{
-  "type": "img2vid",
-  "options": {
-    "prompt": "person speaking, looking at camera",
-    "negative_prompt": "bad hands, six fingers"
-  }
-}
-
-Response (200):
-{
-  "job_id": 123,
-  "status": "processing",
-  "estimated_credits": 100
-}
-
-Errors:
-400 - { "error": "no_media_uploaded" }
-402 - { "error": "insufficient_credits" }
-500 - { "error": "a2e_api_error", "details": "..." }
-```
-
-**GET /api/web/status?id=123**
-```json
-Response (200):
-{
-  "job_id": 123,
-  "status": "completed",
-  "result_url": "https://...",
-  "cost_credits": 100
-}
-
-Response (200 - failed):
-{
-  "job_id": 123,
-  "status": "failed",
-  "error_message": "Face detection failed"
-}
-```
-
-**GET /api/web/creations**
-```json
-Response (200):
-{
-  "items": [
-    {
-      "id": 1,
-      "type": "img2vid",
-      "status": "completed",
-      "url": "https://...", // result_url from jobs table
-      "created_at": "2025-01-03T..."
+#### POST /api/pricing/quote
+```javascript
+app.post('/api/pricing/quote', authenticateToken, async (req, res) => {
+  try {
+    const { sku_code, quantity = 1, flags = [] } = req.body;
+    
+    if (!sku_code) {
+      return res.status(400).json({ error: 'sku_code_required' });
     }
-  ]
-}
+
+    const pricingEngine = new PricingEngine(db);
+    const quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags);
+    
+    res.json(quote);
+  } catch (error) {
+    logger.error({ msg: 'quote_error', error: String(error) });
+    res.status(500).json({ error: error.message });
+  }
+});
 ```
 
-## Verification Approach
-
-### 1. Unit Testing (Manual)
-
-**Authentication:**
-```bash
-# Signup
-curl -X POST http://localhost:3000/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"test123"}'
-
-# Login
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"test123"}'
-
-# Get user
-curl http://localhost:3000/api/auth/me \
-  -H "Authorization: Bearer <token>"
+#### GET /api/plans
+```javascript
+app.get('/api/plans', (req, res) => {
+  const plans = db.prepare('SELECT * FROM plans WHERE active = 1 ORDER BY monthly_price_cents ASC').all();
+  res.json(plans);
+});
 ```
 
-**A2E Integration:**
-```bash
-# Upload file
-curl -X POST http://localhost:3000/api/web/upload \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@test.jpg" \
-  -F "type=img2vid"
+#### POST /api/subscribe
+```javascript
+app.post('/api/subscribe', authenticateToken, async (req, res) => {
+  try {
+    if (!stripe) return res.status(400).json({ error: 'stripe_not_configured' });
+    
+    const { plan_id } = req.body;
+    const plan = db.prepare('SELECT * FROM plans WHERE id = ? AND active = 1').get(plan_id);
+    
+    if (!plan) return res.status(400).json({ error: 'invalid_plan' });
 
-# Process job
-curl -X POST http://localhost:3000/api/web/process \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"img2vid","options":{"prompt":"speaking"}}'
+    const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+    
+    // Create Stripe subscription
+    const subscription = await stripe.subscriptions.create({
+      customer: await getOrCreateStripeCustomer(user.email, req.user.id),
+      items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `${plan.name} Plan` },
+          recurring: { interval: 'month' },
+          unit_amount: plan.monthly_price_cents
+        }
+      }],
+      metadata: {
+        user_id: String(req.user.id),
+        plan_id: plan.id
+      }
+    });
 
-# Check status
-curl "http://localhost:3000/api/web/status?id=1" \
-  -H "Authorization: Bearer <token>"
+    // Create user_plan record
+    const now = new Date().toISOString();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    db.prepare(`
+      INSERT INTO user_plans (user_id, plan_id, start_date, end_date, stripe_subscription_id, status, created_at)
+      VALUES (?, ?, ?, ?, ?, 'active', ?)
+    `).run(req.user.id, plan.id, now, endDate.toISOString(), subscription.id, now);
+
+    res.json({ subscription_id: subscription.id, status: 'active' });
+  } catch (error) {
+    logger.error({ msg: 'subscribe_error', error: String(error) });
+    res.status(500).json({ error: 'subscription_failed' });
+  }
+});
 ```
 
-### 2. Integration Testing
+### Modified Endpoints
 
-**Full User Flow:**
-1. Sign up new user → Verify JWT token and user_credits entry
-2. Purchase credits via Stripe → Verify webhook updates balance
-3. Upload image → Verify Cloudinary storage and DB entry
-4. Process job → Verify A2E API call and DB entry with a2e_task_id
-5. Poll status → Verify background polling updates job status
-6. View dashboard → Verify completed creation appears with result_url
-
-### 3. E2E Testing (Frontend)
-
-**Manual Testing Steps:**
-1. Navigate to `/signup` → Create account → Redirected to `/dashboard`
-2. Navigate to `/pricing` → Click "Buy Now" → Stripe checkout → Payment success
-3. Navigate to `/create` → Select tool → Upload file → Submit → Redirected to `/status`
-4. Watch status page → Verify polling → Verify "completed" state
-5. Navigate to `/dashboard` → Verify creation appears with media preview
-
-### 4. Deployment Verification
-
-**On Render:**
-1. Push to GitHub main branch
-2. Verify Render auto-deploys with new buildCommand
-3. Check logs for successful build and start
-4. Test production URL: https://faceshot-chopshop-1.onrender.com
-5. Verify environment variables are set correctly
-6. Test full signup → purchase → create → status flow
-
-### 5. Stripe Webhook Testing
-
-**Using Stripe CLI:**
-```bash
-stripe listen --forward-to localhost:3000/webhook/stripe
-stripe trigger checkout.session.completed
-```
-
-Verify user_credits table updates correctly.
-
-### 6. A2E API Verification
-
-**Prerequisites:**
-- Valid A2E_API_KEY from user
-- Test account with credits
-
-**Test Cases:**
-- Face Swap: Upload face + video, verify result
-- Image-to-Video: Upload image with prompt, verify 5s video
-- Background Remove: Upload image, verify background removed
-- Enhance: Upload image, verify upscaled result
-- Avatar: Upload image/video, verify avatar creation
-
-### 7. Error Handling Verification
-
-**Test Scenarios:**
-- Insufficient credits → 402 error
-- Invalid A2E API key → 500 error with details
-- A2E task fails → Job status = "failed", error_message populated
-- Network timeout → Retry logic works
-- Stripe webhook signature invalid → 400 error
-
-## Known Risks & Mitigations
-
-### Risks
-
-1. **A2E API Rate Limits**
-   - Risk: Unknown rate limits may cause failures
-   - Mitigation: Implement exponential backoff, queue system
-
-2. **Polling Resource Consumption**
-   - Risk: Many concurrent jobs = many polling intervals
-   - Mitigation: Limit max concurrent jobs per user, use webhooks if A2E supports
-
-3. **SQLite Concurrent Writes**
-   - Risk: Polling updates + user requests = write conflicts
-   - Mitigation: better-sqlite3 handles this well in WAL mode, keep transactions short
-
-4. **A2E API Changes**
-   - Risk: Endpoints may change without notice
-   - Mitigation: Version lock A2E endpoints, monitor for errors
-
-5. **Credit Deduction Race Condition**
-   - Risk: User starts multiple jobs simultaneously
-   - Mitigation: Use SQLite transactions, check-and-deduct atomically
-
-### Mitigations Implementation
+#### Update POST /api/web/process
+Add usage tracking and order creation:
 
 ```javascript
-// Credit deduction with transaction
-const deductCredits = db.transaction((userId, amount) => {
-  const current = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(userId);
-  if (!current || current.balance < amount) {
-    throw new Error('insufficient_credits');
-  }
-  db.prepare('UPDATE user_credits SET balance = balance - ? WHERE user_id = ?').run(amount, userId);
-});
+app.post('/api/web/process', authenticateToken, async (req, res) => {
+  try {
+    const { type, options = {} } = req.body;
+    const userId = req.user.id;
 
-try {
-  deductCredits(userId, cost);
-} catch (error) {
-  return res.status(402).json({ error: 'insufficient_credits' });
-}
+    // Map catalog type to SKU code
+    const typeToSku = {
+      'img2vid': 'C2-30', // Assuming 30s video
+      'faceswap': 'A1-IG', // Simplified
+      'avatar': 'A1-IG',
+      'enhance': 'A1-IG',
+      'bgremove': 'A1-IG'
+    };
+
+    const skuCode = typeToSku[type] || 'A1-IG';
+
+    // Get quote
+    const pricingEngine = new PricingEngine(db);
+    const quote = await pricingEngine.quote(userId, skuCode, 1, []);
+
+    // Get uploaded media
+    const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(userId, type);
+    if (!upload || !upload.url) {
+      return res.status(400).json({ error: 'no_media_uploaded' });
+    }
+
+    // Start A2E task
+    const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL);
+    const a2eResponse = await a2eService.startTask(type, upload.url, options);
+
+    // Create order record
+    const orderResult = db.prepare(`
+      INSERT INTO orders (user_id, sku_code, quantity, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
+      VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'processing', ?)
+    `).run(
+      userId,
+      skuCode,
+      quote.customer_price_cents,
+      quote.internal_cost_cents,
+      parseFloat(quote.margin_percent),
+      quote.total_seconds,
+      quote.overage_seconds,
+      new Date().toISOString()
+    );
+
+    // Create job record
+    const job = db.prepare(`
+      INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at) 
+      VALUES (?,?,?,?,?,?,?,?)
+    `).run(
+      userId,
+      type,
+      'processing',
+      a2eResponse.data._id,
+      a2eResponse.data.coins || quote.total_seconds,
+      orderResult.lastInsertRowid,
+      new Date().toISOString(),
+      new Date().toISOString()
+    );
+
+    // Deduct usage from plan if user has one
+    const userPlan = pricingEngine.getUserActivePlan(userId);
+    if (userPlan) {
+      pricingEngine.deductUsage(userId, userPlan.plan_id, quote.total_seconds);
+    }
+
+    // Start background polling
+    startStatusPolling(job.lastInsertRowid, type, a2eResponse.data._id);
+
+    res.json({ 
+      job_id: job.lastInsertRowid, 
+      status: 'processing',
+      quote
+    });
+  } catch (error) {
+    logger.error({ msg: 'process_error', error: String(error) });
+    res.status(500).json({ error: error.message });
+  }
+});
+```
+
+## Frontend Integration
+
+### Update `frontend/src/lib/api.js`
+
+```javascript
+export const getPricingQuote = (skuCode, quantity = 1, flags = []) => 
+  api.post('/api/pricing/quote', { sku_code: skuCode, quantity, flags });
+
+export const getPlans = () => api.get('/api/plans');
+export const subscribe = (planId) => api.post('/api/subscribe', { plan_id: planId });
+```
+
+### Update `frontend/src/pages/Create.js`
+
+Add pricing preview before submission:
+
+```javascript
+import { getPricingQuote } from '../lib/api';
+
+// Add state
+const [quote, setQuote] = useState(null);
+const [loadingQuote, setLoadingQuote] = useState(false);
+
+// Add useEffect to fetch quote when tool changes
+useEffect(() => {
+  if (!selectedTool || !user) return;
+
+  const typeToSku = {
+    'img2vid': 'C2-30',
+    'faceswap': 'A1-IG',
+    'avatar': 'A1-IG',
+    'enhance': 'A1-IG',
+    'bgremove': 'A1-IG'
+  };
+
+  const skuCode = typeToSku[selectedTool] || 'A1-IG';
+
+  setLoadingQuote(true);
+  getPricingQuote(skuCode, 1, [])
+    .then(res => setQuote(res.data))
+    .catch(err => console.error('Quote error:', err))
+    .finally(() => setLoadingQuote(false));
+}, [selectedTool, user]);
+
+// Add pricing display before submit button
+{quote && (
+  <div className="mb-6 p-4 bg-blue-50 rounded border border-blue-200">
+    <h3 className="font-bold mb-2">Pricing Estimate</h3>
+    <p className="text-sm mb-1">
+      <span className="font-medium">Cost:</span> ${quote.customer_price_usd}
+    </p>
+    <p className="text-sm mb-1">
+      <span className="font-medium">Processing Time:</span> ~{quote.total_seconds} seconds
+    </p>
+    {quote.seconds_from_plan > 0 && (
+      <p className="text-sm text-green-600">
+        ✓ Using {quote.seconds_from_plan}s from your plan
+      </p>
+    )}
+    {quote.overage_seconds > 0 && (
+      <p className="text-sm text-orange-600">
+        ⚠ ${quote.overage_cost_usd} overage charge ({quote.overage_seconds}s)
+      </p>
+    )}
+  </div>
+)}
+```
+
+## Testing & Verification
+
+### Unit Tests (Manual)
+
+**Pricing Engine:**
+```bash
+# Test quote calculation
+curl -X POST http://localhost:3000/api/pricing/quote \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"sku_code":"A1-IG","quantity":1,"flags":[]}'
+
+# Expected: margin >= 40%, customer_price > internal_cost
+
+# Test with Rapid flag
+curl -X POST http://localhost:3000/api/pricing/quote \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"sku_code":"C2-30","quantity":1,"flags":["R"]}'
+
+# Expected: price should be 1.4x base price
+```
+
+### Integration Tests
+
+**Full Flow:**
+1. Sign up user → Subscribe to Pro plan
+2. Check `/api/pricing/quote` shows plan seconds available
+3. Process a job → Verify `plan_usage.seconds_used` increases
+4. Check quote again → Verify remaining seconds decreased
+5. Process enough jobs to exceed plan → Verify overage charges appear
+
+### E2E Frontend Testing
+
+1. Login → Navigate to Create page
+2. Select tool → See pricing estimate appear
+3. Upload file → See same pricing
+4. Submit → Verify job processes
+5. Navigate to Dashboard → See completed creation
+
+## Migration Strategy
+
+### Database Schema Updates
+
+```javascript
+// In index.js, after existing db.exec():
+db.exec(`
+  CREATE TABLE IF NOT EXISTS plans (
+    id TEXT PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    monthly_price_cents INTEGER NOT NULL,
+    included_seconds INTEGER NOT NULL,
+    overage_rate_per_second_cents INTEGER NOT NULL,
+    description TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS skus (
+    id TEXT PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    base_credits INTEGER NOT NULL,
+    base_price_cents INTEGER NOT NULL,
+    default_flags TEXT DEFAULT '[]',
+    description TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS flags (
+    id TEXT PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    price_multiplier REAL DEFAULT 1.0,
+    price_add_flat_cents INTEGER DEFAULT 0,
+    description TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS user_plans (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    plan_id TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    auto_renew INTEGER DEFAULT 1,
+    stripe_subscription_id TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_user_plans_user_id ON user_plans(user_id);
+
+  CREATE TABLE IF NOT EXISTS plan_usage (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    plan_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    seconds_used INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_plan_usage_user_period ON plan_usage(user_id, period_start, period_end);
+
+  CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    sku_code TEXT NOT NULL,
+    quantity INTEGER DEFAULT 1,
+    applied_flags TEXT DEFAULT '[]',
+    customer_price_cents INTEGER NOT NULL,
+    internal_cost_cents INTEGER NOT NULL,
+    margin_percent REAL NOT NULL,
+    total_seconds INTEGER NOT NULL,
+    overage_seconds INTEGER DEFAULT 0,
+    stripe_payment_intent_id TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+`);
+
+// Seed data
+const now = new Date().toISOString();
+
+// Seed plan
+db.prepare(`
+  INSERT OR IGNORE INTO plans (id, code, name, monthly_price_cents, included_seconds, overage_rate_per_second_cents, description, created_at)
+  VALUES ('plan_pro', 'PRO', 'Pro', 7999, 3000, 15, 'Professional plan with 3000 seconds included', ?)
+`).run(now);
+
+// Seed SKUs
+db.prepare(`INSERT OR IGNORE INTO skus (id, code, name, base_credits, base_price_cents, default_flags, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run('sku_c2_30', 'C2-30', '30s Ad/UGC Clip', 180, 5900, '[]', '30-second promotional video', now);
+db.prepare(`INSERT OR IGNORE INTO skus (id, code, name, base_credits, base_price_cents, default_flags, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run('sku_a1_ig', 'A1-IG', 'Instagram Image 1080p', 60, 499, '[]', 'Social media ready image', now);
+db.prepare(`INSERT OR IGNORE INTO skus (id, code, name, base_credits, base_price_cents, default_flags, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run('sku_b1_30soc', 'B1-30SOC', '30 Social Creatives', 1800, 7900, '["B"]', 'Bundle of 30 social media images', now);
+
+// Seed flags
+db.prepare(`INSERT OR IGNORE INTO flags (id, code, label, price_multiplier, price_add_flat_cents, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('flag_r', 'R', 'Rapid (same-day)', 1.4, 0, 'Priority processing', now);
+db.prepare(`INSERT OR IGNORE INTO flags (id, code, label, price_multiplier, price_add_flat_cents, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('flag_c', 'C', 'Custom (brand style)', 1.0, 9900, 'Custom branding', now);
+db.prepare(`INSERT OR IGNORE INTO flags (id, code, label, price_multiplier, price_add_flat_cents, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('flag_b', 'B', 'Batch discount', 0.85, 0, 'Batch discount', now);
 ```
 
 ## Success Criteria
 
-1. ✅ Users can sign up and log in with email/password
-2. ✅ No Telegram login UI elements visible
-3. ✅ Users can purchase credits via Stripe
-4. ✅ Users can upload images/videos
-5. ✅ Users can process jobs via A2E API
-6. ✅ Job status updates automatically in background
-7. ✅ Completed creations appear in dashboard with result media
-8. ✅ All A2E catalog types work (faceswap, img2vid, enhance, bgremove, avatar)
-9. ✅ Render deployment succeeds with updated buildCommand
-10. ✅ Production environment works end-to-end
+- ✅ PricingEngine service calculates accurate quotes with margin >= 40%
+- ✅ Users can subscribe to Pro plan via Stripe
+- ✅ Usage is tracked per monthly period in `plan_usage` table
+- ✅ Create page shows real-time pricing estimate
+- ✅ Jobs deduct seconds from user's plan quota
+- ✅ Overage charges calculated correctly when plan limit exceeded
+- ✅ Orders table tracks all pricing details for analytics
+- ✅ All database migrations run idempotently
 
-## Implementation Sequence
+## Phase 2 Considerations
 
-1. **Phase 1: Authentication** (Highest Priority)
-   - Update database schema
-   - Implement auth routes
-   - Test login/signup flow
-
-2. **Phase 2: A2E Service** (Critical Path)
-   - Create A2E service class
-   - Implement endpoint mappings
-   - Test with A2E API directly
-
-3. **Phase 3: Integration** (Blocking)
-   - Update /api/web/process
-   - Implement polling mechanism
-   - Update /api/web/status and /api/web/creations
-
-4. **Phase 4: Frontend Updates** (Quick Wins)
-   - Remove Telegram login
-   - Update Dashboard greeting
-   - Update FAQs
-
-5. **Phase 5: Deployment** (Final)
-   - Update render.yaml
-   - Test on Render
-   - Verify end-to-end
+**Future Enhancements** (out of scope for Phase 1):
+- Admin panel for managing SKUs, plans, and flags
+- Additional vectors (V1-V7) and 17 more SKUs
+- Multiple creation screens (Images, Video, Voice, Text)
+- License flag implementation (L_STD, L_EXT, L_EXCL)
+- Referral system and promotional credits
+- Advanced batch pricing rules
+- PostgreSQL migration for production scale
+- Webhook support from A2E (if available)
+- Comprehensive analytics dashboard
 
 ## Estimated Effort
 
-- **Authentication System**: 2-3 hours
-- **A2E Service Integration**: 4-6 hours
-- **Polling Mechanism**: 2-3 hours
-- **Frontend Cleanup**: 1 hour
-- **Testing & Debugging**: 3-4 hours
-- **Deployment & Verification**: 1-2 hours
+- Database schema & migrations: 1-2 hours
+- PricingEngine service: 3-4 hours
+- API endpoints: 2-3 hours
+- Frontend integration: 2-3 hours
+- Testing & debugging: 2-3 hours
 
-**Total: 13-19 hours**
-
-## Dependencies & Prerequisites
-
-1. **A2E API Key**: User must provide valid subscription key
-2. **Stripe Account**: Already configured (from existing setup)
-3. **Cloudinary Account**: Already configured (from existing setup)
-4. **Render Account**: Already set up with service running
-5. **Test Media**: Sample images/videos for testing each catalog type
-
-## Questions for User
-
-1. Do you have a valid A2E API key? If yes, what credits/quota do you have?
-2. Are there specific A2E features you want to prioritize (e.g., face swap vs image-to-video)?
-3. Should we implement webhook support if A2E provides webhook URLs, or is polling acceptable?
-4. What should be the default credit cost for each operation (or should we use A2E's returned costs)?
-5. Do you want to keep the telegram_user_id column for future Telegram integration, or remove it entirely?
-6. Should we add rate limiting per user (e.g., max 5 concurrent jobs)?
+**Total: 10-15 hours**

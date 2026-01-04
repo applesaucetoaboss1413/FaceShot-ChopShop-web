@@ -31,4 +31,9 @@ export const uploadFile = (file, type) => {
 export const processJob = (type, options = {}) => api.post('/api/web/process', { type, ...options });
 export const getJobStatus = (id) => api.get(`/api/web/status?id=${id}`);
 
+export const getPricingQuote = (skuCode, quantity = 1, flags = []) => 
+    api.post('/api/pricing/quote', { sku_code: skuCode, quantity, flags });
+export const getPlans = () => api.get('/api/plans');
+export const subscribe = (planId) => api.post('/api/subscribe', { plan_id: planId });
+
 export default api;
