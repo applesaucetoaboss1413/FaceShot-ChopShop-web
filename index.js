@@ -462,6 +462,49 @@ app.post('/api/subscribe', authenticateToken, async (req, res) => {
     }
 })
 
+app.post('/api/orders/create', authenticateToken, async (req, res) => {
+    try {
+        const { sku_code, quantity = 1, flags = [] } = req.body
+        
+        if (!sku_code) {
+            return res.status(400).json({ error: 'sku_code_required' })
+        }
+
+        const pricingEngine = new PricingEngine(db)
+        let quote
+        try {
+            quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags)
+        } catch (quoteError) {
+            logger.error({ msg: 'order_quote_error', error: String(quoteError) })
+            return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
+        }
+
+        const orderResult = db.prepare(`
+            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        `).run(
+            req.user.id,
+            sku_code,
+            quantity,
+            JSON.stringify(quote.applied_flags),
+            quote.customer_price_cents,
+            quote.internal_cost_cents,
+            parseFloat(quote.margin_percent),
+            quote.total_seconds,
+            quote.overage_seconds,
+            new Date().toISOString()
+        )
+
+        res.json({ 
+            order_id: orderResult.lastInsertRowid,
+            quote
+        })
+    } catch (error) {
+        logger.error({ msg: 'order_create_error', error: String(error) })
+        res.status(500).json({ error: 'order_creation_failed', details: error.message })
+    }
+})
+
 app.get('/api/web/catalog', (req, res) => {
     res.json(catalogConfig.catalog)
 })
@@ -576,28 +619,55 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
-        const { type, options = {} } = req.body
+        const { type, order_id, options = {} } = req.body
         const userId = req.user.id
 
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
 
-        const typeToSku = {
-            'img2vid': 'C2-30',
-            'faceswap': 'A1-IG',
-            'avatar': 'A1-IG',
-            'enhance': 'A1-IG',
-            'bgremove': 'A1-IG'
-        }
+        let orderId = order_id
+        let quote = null
 
-        const skuCode = typeToSku[type] || 'A1-IG'
+        if (!orderId) {
+            const typeToSku = {
+                'img2vid': 'C2-30',
+                'faceswap': 'A1-IG',
+                'avatar': 'A1-IG',
+                'enhance': 'A1-IG',
+                'bgremove': 'A1-IG'
+            }
 
-        const pricingEngine = new PricingEngine(db)
-        let quote
-        try {
-            quote = await pricingEngine.quote(userId, skuCode, 1, [])
-        } catch (quoteError) {
-            logger.error({ msg: 'quote_error', error: String(quoteError) })
-            return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
+            const skuCode = typeToSku[type] || 'A1-IG'
+
+            const pricingEngine = new PricingEngine(db)
+            try {
+                quote = await pricingEngine.quote(userId, skuCode, 1, [])
+            } catch (quoteError) {
+                logger.error({ msg: 'quote_error', error: String(quoteError) })
+                return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
+            }
+
+            const orderResult = db.prepare(`
+                INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
+                VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, 'processing', ?)
+            `).run(
+                userId,
+                skuCode,
+                quote.customer_price_cents,
+                quote.internal_cost_cents,
+                parseFloat(quote.margin_percent),
+                quote.total_seconds,
+                quote.overage_seconds,
+                new Date().toISOString()
+            )
+
+            orderId = orderResult.lastInsertRowid
+        } else {
+            const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, userId)
+            if (!order) {
+                return res.status(404).json({ error: 'order_not_found' })
+            }
+            
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('processing', orderId)
         }
 
         const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(userId, type)
@@ -612,26 +682,16 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             a2eResponse = await a2eService.startTask(type, upload.url, options)
         } catch (a2eError) {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
             return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
         }
         
         if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
             return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
         }
 
-        const orderResult = db.prepare(`
-            INSERT INTO orders (user_id, sku_code, quantity, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
-            VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'processing', ?)
-        `).run(
-            userId,
-            skuCode,
-            quote.customer_price_cents,
-            quote.internal_cost_cents,
-            parseFloat(quote.margin_percent),
-            quote.total_seconds,
-            quote.overage_seconds,
-            new Date().toISOString()
-        )
+        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
 
         const job = db.prepare(`
             INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at) 
@@ -641,21 +701,23 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             type,
             'processing',
             a2eResponse.data._id,
-            a2eResponse.data.coins || quote.total_seconds,
-            orderResult.lastInsertRowid,
+            a2eResponse.data.coins || order.total_seconds,
+            orderId,
             new Date().toISOString(),
             new Date().toISOString()
         )
 
+        const pricingEngine = new PricingEngine(db)
         const userPlan = pricingEngine.getUserActivePlan(userId)
         if (userPlan) {
-            pricingEngine.deductUsage(userId, userPlan.plan_id, quote.total_seconds)
+            pricingEngine.deductUsage(userId, userPlan.plan_id, order.total_seconds)
         }
 
         startStatusPolling(job.lastInsertRowid, type, a2eResponse.data._id)
 
         res.json({ 
             job_id: job.lastInsertRowid, 
+            order_id: orderId,
             status: 'processing',
             quote
         })
