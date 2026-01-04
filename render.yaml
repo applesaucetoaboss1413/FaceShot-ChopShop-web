@@ -28,3 +28,5 @@ services:
         sync: false
       - key: A2E_API_KEY
         sync: false
+      - key: A2E_BASE_URL
+        sync: false

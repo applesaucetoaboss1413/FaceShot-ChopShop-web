@@ -22,7 +22,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-end mb-8">
                 <div>
                     <h1 className="text-3xl font-bold">Dashboard</h1>
-                    <p className="text-gray-600">Welcome, {user.first_name}</p>
+                    <p className="text-gray-600">Welcome, {user.email}</p>
                 </div>
                 <div className="text-right">
                     <div className="text-2xl font-mono font-bold">{credits} pts</div>
