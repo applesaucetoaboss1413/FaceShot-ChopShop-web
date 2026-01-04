@@ -3,7 +3,7 @@ services:
     name: FaceShot-ChopShop-web
     env: node
     plan: free
-    buildCommand: "npm ci && cd frontend && npm ci && npm run build"
+    buildCommand: "npm install && cd frontend && npm install && npm run build"
     startCommand: "npm start"
     envVars:
       - key: PORT
@@ -12,16 +12,6 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
-      - key: ADMIN_PASSWORD
-        generateValue: true
-      - key: TELEGRAM_API_ID
-        sync: false
-      - key: TELEGRAM_API_HASH
-        sync: false
-      - key: TELEGRAM_PHONE
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -34,7 +24,7 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: REACT_APP_TELEGRAM_BOT_NAME
-        sync: false
       - key: REACT_APP_BACKEND_URL
+        sync: false
+      - key: A2E_API_KEY
         sync: false

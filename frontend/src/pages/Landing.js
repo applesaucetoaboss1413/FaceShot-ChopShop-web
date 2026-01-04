@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { getStats } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useNavigate, Link } from 'react-router-dom';
-import TelegramLoginButton from '../components/TelegramLoginButton';
 
 export default function Landing() {
     const [stats, setStats] = useState(null);
@@ -13,11 +12,6 @@ export default function Landing() {
         getStats().then(res => setStats(res.data)).catch(console.error);
         if (user) navigate('/dashboard');
     }, [user, navigate]);
-
-    const handleTelegramAuth = (user) => {
-        console.log('Telegram auth:', user);
-        // TODO: Send to backend for verification and login
-    };
 
     return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-4">
@@ -31,12 +25,6 @@ export default function Landing() {
                     <Link to="/signup" className="bg-black text-white px-8 py-3 rounded-lg text-lg font-bold hover:bg-gray-800">
                         Get Started
                     </Link>
-                </div>
-                <div className="mt-4">
-                    <TelegramLoginButton 
-                        botName={process.env.REACT_APP_TELEGRAM_BOT_NAME || "ImMoreThanJustSomeBot"} 
-                        onAuth={handleTelegramAuth}
-                    />
                 </div>
             </div>
 

@@ -8,6 +8,7 @@ const Stripe = require('stripe')
 const cloudinary = require('cloudinary').v2
 const axios = require('axios')
 const jwt = require('jsonwebtoken')
+const bcrypt = require('bcryptjs')
 const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
@@ -35,8 +36,7 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://telegram.org"],
-            frameSrc: ["'self'", "https://oauth.telegram.org"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https://res.cloudinary.com"],
             connectSrc: ["'self'"],
         },
@@ -98,6 +98,54 @@ const authenticateToken = (req, res, next) => {
     }
 }
 
+app.post('/api/auth/signup', async (req, res) => {
+    try {
+        const { email, password } = req.body
+        if (!email || !password) return res.status(400).json({ error: 'missing_fields' })
+        
+        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+        if (existing) return res.status(400).json({ error: 'email_taken' })
+        
+        const hash = await bcrypt.hash(password, 10)
+        const result = db.prepare('INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)').run(email, hash, new Date().toISOString())
+        const userId = result.lastInsertRowid
+        
+        // Initialize credits
+        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, 0)
+        
+        const token = jwt.sign({ id: userId }, process.env.SESSION_SECRET, { expiresIn: '7d' })
+        res.json({ token, user: { id: userId, email } })
+    } catch (e) {
+        logger.error({ msg: 'signup_error', error: String(e) })
+        res.status(500).json({ error: 'signup_failed' })
+    }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body
+        if (!email || !password) return res.status(400).json({ error: 'missing_fields' })
+        
+        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
+        if (!user || !user.password_hash) return res.status(401).json({ error: 'invalid_credentials' })
+        
+        const valid = await bcrypt.compare(password, user.password_hash)
+        if (!valid) return res.status(401).json({ error: 'invalid_credentials' })
+        
+        const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '7d' })
+        res.json({ token, user: { id: user.id, email: user.email } })
+    } catch (e) {
+        logger.error({ msg: 'login_error', error: String(e) })
+        res.status(500).json({ error: 'login_failed' })
+    }
+})
+
+app.get('/api/auth/me', authenticateToken, (req, res) => {
+    const user = db.prepare('SELECT id, email, created_at FROM users WHERE id = ?').get(req.user.id)
+    if (!user) return res.status(404).json({ error: 'user_not_found' })
+    res.json(user)
+})
+
 app.post('/webhook/stripe', async (req, res) => {
     const sig = req.headers['stripe-signature']
     let event
@@ -157,14 +205,42 @@ cloudinary.config({
 const upload = multer({ storage: multer.memoryStorage() })
 
 const db = new Database(process.env.DB_PATH || 'production.db')
-db.exec(
-    `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE);
-   CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
-   CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, created_at TEXT, updated_at TEXT);
-   CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);`
-)
+
+// Initialize DB and migrate if necessary
+db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY, 
+        email TEXT UNIQUE, 
+        password_hash TEXT, 
+        created_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, result_url TEXT, external_id TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);
+`)
+
+// Simple migration to ensure columns exist
+try {
+    const tableInfo = db.prepare('PRAGMA table_info(users)').all();
+    const hasEmail = tableInfo.some(col => col.name === 'email');
+    if (!hasEmail) {
+        db.exec('ALTER TABLE users ADD COLUMN email TEXT UNIQUE');
+        db.exec('ALTER TABLE users ADD COLUMN password_hash TEXT');
+        db.exec('ALTER TABLE users ADD COLUMN created_at TEXT');
+    }
+
+    const jobsInfo = db.prepare('PRAGMA table_info(jobs)').all();
+    if (!jobsInfo.some(col => col.name === 'external_id')) {
+        db.exec('ALTER TABLE jobs ADD COLUMN external_id TEXT');
+    }
+    if (!jobsInfo.some(col => col.name === 'result_url')) {
+        db.exec('ALTER TABLE jobs ADD COLUMN result_url TEXT');
+    }
+} catch (e) {
+    console.error('Migration error:', e);
+}
 
 const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
@@ -262,7 +338,22 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
         const type = req.body.type
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
-        const job = db.prepare('INSERT INTO jobs (user_id, type, status, created_at, updated_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'processing', new Date().toISOString(), new Date().toISOString())
+        
+        // Find latest upload for this user
+        const upload = db.prepare('SELECT * FROM miniapp_creations WHERE user_id = ? AND type = ? ORDER BY id DESC LIMIT 1').get(req.user.id, type)
+        if (!upload || !upload.url) {
+            return res.status(400).json({ error: 'no_upload_found' })
+        }
+
+        // Check credits (optional, but good practice)
+        // const credits = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(req.user.id);
+        // if (!credits || credits.balance < COST) return res.status(402).json({ error: 'insufficient_credits' });
+
+        const a2eJob = await a2e.submitJob(type, { url: upload.url })
+        
+        const job = db.prepare('INSERT INTO jobs (user_id, type, status, external_id, created_at, updated_at) VALUES (?,?,?,?,?,?)')
+                      .run(req.user.id, type, 'processing', a2eJob.id, new Date().toISOString(), new Date().toISOString())
+        
         res.json({ job_id: job.lastInsertRowid, status: 'processing' })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
