@@ -7,6 +7,8 @@ export default function Create() {
     const [catalog, setCatalog] = useState([]);
     const [selectedTool, setSelectedTool] = useState(null);
     const [file, setFile] = useState(null);
+    const [prompt, setPrompt] = useState('');
+    const [negativePrompt, setNegativePrompt] = useState('');
     const [loading, setLoading] = useState(false);
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -26,7 +28,8 @@ export default function Create() {
             // 1. Upload
             await uploadFile(file, selectedTool, user.id);
             // 2. Process
-            const { data } = await processJob(selectedTool);
+            const options = selectedTool === 'img2vid' ? { prompt, negative_prompt: negativePrompt } : {};
+            const { data } = await processJob(selectedTool, options);
             // 3. Redirect to status
             navigate(`/status?id=${data.job_id}`);
         } catch (err) {
@@ -78,6 +81,31 @@ export default function Create() {
                         required
                     />
                 </div>
+
+                {selectedTool === 'img2vid' && (
+                    <>
+                        <div className="mb-6">
+                            <label className="block mb-2 font-medium">Prompt</label>
+                            <textarea
+                                value={prompt}
+                                onChange={e => setPrompt(e.target.value)}
+                                className="w-full border rounded px-3 py-2"
+                                rows="3"
+                                placeholder="Describe the motion or style you want..."
+                            />
+                        </div>
+                        <div className="mb-6">
+                            <label className="block mb-2 font-medium">Negative Prompt (Optional)</label>
+                            <textarea
+                                value={negativePrompt}
+                                onChange={e => setNegativePrompt(e.target.value)}
+                                className="w-full border rounded px-3 py-2"
+                                rows="2"
+                                placeholder="What to avoid in the generation..."
+                            />
+                        </div>
+                    </>
+                )}
 
                 <button
                     type="submit"

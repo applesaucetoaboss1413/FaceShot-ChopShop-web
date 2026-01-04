@@ -28,7 +28,7 @@ export const uploadFile = (file, type) => {
     formData.append('type', type);
     return api.post('/api/web/upload', formData);
 };
-export const processJob = (type) => api.post('/api/web/process', { type });
+export const processJob = (type, options = {}) => api.post('/api/web/process', { type, ...options });
 export const getJobStatus = (id) => api.get(`/api/web/status?id=${id}`);
 
 export default api;
