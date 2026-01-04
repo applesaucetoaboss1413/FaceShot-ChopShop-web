@@ -495,14 +495,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
     }
 })
 
-app.get('/api/web/catalog', (req, res) => {
-    res.json(catalogConfig.catalog)
-})
 
-app.get('/api/web/packs', (req, res) => {
-    res.json(packsConfig.packs)
-})
->>>>>>> 20da0a092a761c46efc05c5b9d0241b68e3ce178
 
 app.post('/api/web/checkout', authenticateToken, async (req, res) => {
     try {
