@@ -187,52 +187,36 @@ db.exec(
     `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, first_name TEXT, created_at TEXT);
    CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, a2e_task_id TEXT, result_url TEXT, error_message TEXT, cost_credits INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
+   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, a2e_task_id TEXT, result_url TEXT, error_message TEXT, cost_credits INTEGER DEFAULT 0, order_id INTEGER, created_at TEXT, updated_at TEXT);
    CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);`
+   CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);
+   CREATE TABLE IF NOT EXISTS plans (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, monthly_price_cents INTEGER NOT NULL, included_seconds INTEGER NOT NULL, overage_rate_per_second_cents INTEGER NOT NULL, description TEXT, active INTEGER DEFAULT 1, created_at TEXT NOT NULL);
+   CREATE TABLE IF NOT EXISTS skus (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, base_credits INTEGER NOT NULL, base_price_cents INTEGER NOT NULL, default_flags TEXT DEFAULT '[]', description TEXT, active INTEGER DEFAULT 1, created_at TEXT NOT NULL);
+   CREATE TABLE IF NOT EXISTS flags (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, label TEXT NOT NULL, price_multiplier REAL DEFAULT 1.0, price_add_flat_cents INTEGER DEFAULT 0, description TEXT, active INTEGER DEFAULT 1, created_at TEXT NOT NULL);
+   CREATE TABLE IF NOT EXISTS user_plans (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, plan_id TEXT NOT NULL, start_date TEXT NOT NULL, end_date TEXT, auto_renew INTEGER DEFAULT 1, stripe_subscription_id TEXT, status TEXT DEFAULT 'active', created_at TEXT NOT NULL);
+   CREATE INDEX IF NOT EXISTS idx_user_plans_user_id ON user_plans(user_id);
+   CREATE TABLE IF NOT EXISTS plan_usage (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, plan_id TEXT NOT NULL, period_start TEXT NOT NULL, period_end TEXT NOT NULL, seconds_used INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+   CREATE INDEX IF NOT EXISTS idx_plan_usage_user_period ON plan_usage(user_id, period_start, period_end);
+   CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, sku_code TEXT NOT NULL, quantity INTEGER DEFAULT 1, applied_flags TEXT DEFAULT '[]', customer_price_cents INTEGER NOT NULL, internal_cost_cents INTEGER NOT NULL, margin_percent REAL NOT NULL, total_seconds INTEGER NOT NULL, overage_seconds INTEGER DEFAULT 0, stripe_payment_intent_id TEXT, status TEXT DEFAULT 'pending', created_at TEXT NOT NULL);
+   CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);`
 )
+
+const now = new Date().toISOString()
+
+db.prepare(`INSERT OR IGNORE INTO plans (id, code, name, monthly_price_cents, included_seconds, overage_rate_per_second_cents, description, created_at) VALUES ('plan_pro', 'PRO', 'Pro', 7999, 3000, 15, 'Professional plan with 3000 seconds included', ?)`).run(now)
+
+db.prepare(`INSERT OR IGNORE INTO skus (id, code, name, base_credits, base_price_cents, default_flags, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run('sku_c2_30', 'C2-30', '30s Ad/UGC Clip', 180, 5900, '[]', '30-second promotional video', now)
+db.prepare(`INSERT OR IGNORE INTO skus (id, code, name, base_credits, base_price_cents, default_flags, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run('sku_a1_ig', 'A1-IG', 'Instagram Image 1080p', 60, 499, '[]', 'Social media ready image', now)
+db.prepare(`INSERT OR IGNORE INTO skus (id, code, name, base_credits, base_price_cents, default_flags, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run('sku_b1_30soc', 'B1-30SOC', '30 Social Creatives', 1800, 7900, '["B"]', 'Bundle of 30 social media images', now)
+
+db.prepare(`INSERT OR IGNORE INTO flags (id, code, label, price_multiplier, price_add_flat_cents, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('flag_r', 'R', 'Rapid (same-day)', 1.4, 0, 'Priority processing', now)
+db.prepare(`INSERT OR IGNORE INTO flags (id, code, label, price_multiplier, price_add_flat_cents, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('flag_c', 'C', 'Custom (brand style)', 1.0, 9900, 'Custom branding', now)
+db.prepare(`INSERT OR IGNORE INTO flags (id, code, label, price_multiplier, price_add_flat_cents, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run('flag_b', 'B', 'Batch discount', 0.85, 0, 'Batch discount', now)
 
 const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
 const A2EService = require('./services/a2e')
-
-const pollingJobs = new Map()
-
-function startStatusPolling(jobId, type, a2eTaskId) {
-    const pollInterval = setInterval(async () => {
-        try {
-            const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
-            const status = await a2eService.getTaskStatus(type, a2eTaskId)
-            
-            if (status.data && status.data.current_status === 'completed') {
-                db.prepare(`
-                    UPDATE jobs 
-                    SET status='completed', result_url=?, updated_at=? 
-                    WHERE id=?
-                `).run(status.data.result_url, new Date().toISOString(), jobId)
-                
-                clearInterval(pollInterval)
-                pollingJobs.delete(jobId)
-                logger.info({ msg: 'job_completed', jobId, a2eTaskId })
-            } else if (status.data && status.data.current_status === 'failed') {
-                db.prepare(`
-                    UPDATE jobs 
-                    SET status='failed', error_message=?, updated_at=? 
-                    WHERE id=?
-                `).run(status.data.failed_message || 'A2E task failed', new Date().toISOString(), jobId)
-                
-                clearInterval(pollInterval)
-                pollingJobs.delete(jobId)
-                logger.error({ msg: 'job_failed', jobId, a2eTaskId })
-            }
-        } catch (error) {
-            logger.error({ msg: 'polling_error', jobId, error: String(error) })
-        }
-    }, 10000)
-    
-    pollingJobs.set(jobId, pollInterval)
-}
-const A2EService = require('./services/a2e')
+const PricingEngine = require('./services/pricing')
 
 const pollingJobs = new Map()
 
@@ -400,6 +384,127 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
     }
 })
 
+app.post('/api/pricing/quote', authenticateToken, async (req, res) => {
+    try {
+        const { sku_code, quantity = 1, flags = [] } = req.body
+        
+        if (!sku_code) {
+            return res.status(400).json({ error: 'sku_code_required' })
+        }
+
+        const pricingEngine = new PricingEngine(db)
+        const quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags)
+        
+        res.json(quote)
+    } catch (error) {
+        logger.error({ msg: 'quote_error', error: String(error) })
+        res.status(500).json({ error: error.message })
+    }
+})
+
+app.get('/api/plans', (req, res) => {
+    const plans = db.prepare('SELECT * FROM plans WHERE active = 1 ORDER BY monthly_price_cents ASC').all()
+    res.json(plans)
+})
+
+async function getOrCreateStripeCustomer(email, userId) {
+    const customers = await stripe.customers.list({ email, limit: 1 })
+    if (customers.data.length > 0) {
+        return customers.data[0].id
+    }
+    const customer = await stripe.customers.create({ 
+        email,
+        metadata: { user_id: String(userId) }
+    })
+    return customer.id
+}
+
+app.post('/api/subscribe', authenticateToken, async (req, res) => {
+    try {
+        if (!stripe) return res.status(400).json({ error: 'stripe_not_configured' })
+        
+        const { plan_id } = req.body
+        const plan = db.prepare('SELECT * FROM plans WHERE id = ? AND active = 1').get(plan_id)
+        
+        if (!plan) return res.status(400).json({ error: 'invalid_plan' })
+
+        const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id)
+        
+        const subscription = await stripe.subscriptions.create({
+            customer: await getOrCreateStripeCustomer(user.email, req.user.id),
+            items: [{
+                price_data: {
+                    currency: 'usd',
+                    product_data: { name: `${plan.name} Plan` },
+                    recurring: { interval: 'month' },
+                    unit_amount: plan.monthly_price_cents
+                }
+            }],
+            metadata: {
+                user_id: String(req.user.id),
+                plan_id: plan.id
+            }
+        })
+
+        const now = new Date().toISOString()
+        const endDate = new Date()
+        endDate.setMonth(endDate.getMonth() + 1)
+
+        db.prepare(`
+            INSERT INTO user_plans (user_id, plan_id, start_date, end_date, stripe_subscription_id, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?)
+        `).run(req.user.id, plan.id, now, endDate.toISOString(), subscription.id, now)
+
+        res.json({ subscription_id: subscription.id, status: 'active' })
+    } catch (error) {
+        logger.error({ msg: 'subscribe_error', error: String(error) })
+        res.status(500).json({ error: 'subscription_failed' })
+    }
+})
+
+app.post('/api/orders/create', authenticateToken, async (req, res) => {
+    try {
+        const { sku_code, quantity = 1, flags = [] } = req.body
+        
+        if (!sku_code) {
+            return res.status(400).json({ error: 'sku_code_required' })
+        }
+
+        const pricingEngine = new PricingEngine(db)
+        let quote
+        try {
+            quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags)
+        } catch (quoteError) {
+            logger.error({ msg: 'order_quote_error', error: String(quoteError) })
+            return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
+        }
+
+        const orderResult = db.prepare(`
+            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+        `).run(
+            req.user.id,
+            sku_code,
+            quantity,
+            JSON.stringify(quote.applied_flags),
+            quote.customer_price_cents,
+            quote.internal_cost_cents,
+            parseFloat(quote.margin_percent),
+            quote.total_seconds,
+            quote.overage_seconds,
+            new Date().toISOString()
+        )
+
+        res.json({ 
+            order_id: orderResult.lastInsertRowid,
+            quote
+        })
+    } catch (error) {
+        logger.error({ msg: 'order_create_error', error: String(error) })
+        res.status(500).json({ error: 'order_creation_failed', details: error.message })
+    }
+})
+
 app.get('/api/web/catalog', (req, res) => {
     res.json(catalogConfig.catalog)
 })
@@ -514,19 +619,62 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
-        const { type, options = {} } = req.body
+        const { type, order_id, options = {} } = req.body
+        const userId = req.user.id
+
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
-        
-        const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
-        if (!creditRow || creditRow.balance < 10) {
-            return res.status(402).json({ error: 'insufficient_credits' })
+
+        let orderId = order_id
+        let quote = null
+
+        if (!orderId) {
+            const typeToSku = {
+                'img2vid': 'C2-30',
+                'faceswap': 'A1-IG',
+                'avatar': 'A1-IG',
+                'enhance': 'A1-IG',
+                'bgremove': 'A1-IG'
+            }
+
+            const skuCode = typeToSku[type] || 'A1-IG'
+
+            const pricingEngine = new PricingEngine(db)
+            try {
+                quote = await pricingEngine.quote(userId, skuCode, 1, [])
+            } catch (quoteError) {
+                logger.error({ msg: 'quote_error', error: String(quoteError) })
+                return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
+            }
+
+            const orderResult = db.prepare(`
+                INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
+                VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, 'processing', ?)
+            `).run(
+                userId,
+                skuCode,
+                quote.customer_price_cents,
+                quote.internal_cost_cents,
+                parseFloat(quote.margin_percent),
+                quote.total_seconds,
+                quote.overage_seconds,
+                new Date().toISOString()
+            )
+
+            orderId = orderResult.lastInsertRowid
+        } else {
+            const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, userId)
+            if (!order) {
+                return res.status(404).json({ error: 'order_not_found' })
+            }
+            
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('processing', orderId)
         }
-        
-        const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(req.user.id, type)
+
+        const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(userId, type)
         if (!upload || !upload.url) {
             return res.status(400).json({ error: 'no_media_uploaded' })
         }
-        
+
         const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
         
         let a2eResponse
@@ -534,46 +682,48 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             a2eResponse = await a2eService.startTask(type, upload.url, options)
         } catch (a2eError) {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
             return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
         }
         
         if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
             return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
         }
-        
-        const taskId = a2eResponse.data._id
-        const costCredits = a2eResponse.data.coins || 10
-        
-        const deductCredits = db.transaction((userId, amount) => {
-            const current = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(userId)
-            if (!current || current.balance < amount) {
-                throw new Error('insufficient_credits')
-            }
-            db.prepare('UPDATE user_credits SET balance = balance - ? WHERE user_id = ?').run(amount, userId)
-        })
-        
-        try {
-            deductCredits(req.user.id, costCredits)
-        } catch (error) {
-            return res.status(402).json({ error: 'insufficient_credits' })
-        }
-        
-        const job = db.prepare('INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, created_at, updated_at) VALUES (?,?,?,?,?,?,?)').run(
-            req.user.id, 
-            type, 
-            'processing', 
-            taskId, 
-            costCredits, 
-            new Date().toISOString(), 
+
+        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
+
+        const job = db.prepare(`
+            INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at) 
+            VALUES (?,?,?,?,?,?,?,?)
+        `).run(
+            userId,
+            type,
+            'processing',
+            a2eResponse.data._id,
+            a2eResponse.data.coins || order.total_seconds,
+            orderId,
+            new Date().toISOString(),
             new Date().toISOString()
         )
-        
-        startStatusPolling(job.lastInsertRowid, type, taskId)
-        
-        res.json({ job_id: job.lastInsertRowid, status: 'processing', estimated_credits: costCredits })
+
+        const pricingEngine = new PricingEngine(db)
+        const userPlan = pricingEngine.getUserActivePlan(userId)
+        if (userPlan) {
+            pricingEngine.deductUsage(userId, userPlan.plan_id, order.total_seconds)
+        }
+
+        startStatusPolling(job.lastInsertRowid, type, a2eResponse.data._id)
+
+        res.json({ 
+            job_id: job.lastInsertRowid, 
+            order_id: orderId,
+            status: 'processing',
+            quote
+        })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
-        res.status(500).json({ error: 'process_failed' })
+        res.status(500).json({ error: 'process_failed', details: e.message })
     }
 })
 
