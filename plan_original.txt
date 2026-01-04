@@ -18,7 +18,7 @@ Do not make assumptions on important decisions — get clarification first.
 
 ## Workflow Steps
 
-### [x] Step: Technical Specification - COMPLETED
+### [x] Step: Technical Specification
 
 Assess the task's difficulty, as underestimating it leads to poor outcomes.
 - easy: Straightforward implementation, trivial bug fix or feature
@@ -50,7 +50,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 1: Database Schema Updates and Authentication Backend
+### [ ] Step 1: Database Schema Updates and Authentication Backend
 <!-- chat-id: c952921e-2180-4488-9732-11338fe8e738 -->
 
 **Objective**: Implement the authentication system foundation
@@ -70,7 +70,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 2: A2E Service Integration
+### [ ] Step 2: A2E Service Integration
 <!-- chat-id: 37e74846-a830-4402-ac1f-0ed6efa6a806 -->
 
 **Objective**: Create A2E API client service and integrate with catalog types
@@ -93,7 +93,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 3: Update Job Processing and Background Polling - COMPLETED
+### [ ] Step 3: Update Job Processing and Background Polling
 <!-- chat-id: dba290b1-d7a3-4815-8bbc-c91301099ba1 -->
 
 **Objective**: Update `/api/web/process` to call A2E API and implement background polling
@@ -120,7 +120,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 4: Update Status and Creations Endpoints
+### [ ] Step 4: Update Status and Creations Endpoints
 <!-- chat-id: 215659a1-de9b-4608-835a-2573feab7249 -->
 
 **Objective**: Update frontend-facing endpoints to return A2E results
@@ -138,7 +138,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 5: Frontend Updates
+### [ ] Step 5: Frontend Updates
 <!-- chat-id: 94f6714a-f2b2-4b8b-856b-440982d1481f -->
 
 **Objective**: Remove Telegram login and update UI for email authentication
@@ -158,7 +158,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 6: Deployment Configuration - COMPLETED
+### [ ] Step 6: Deployment Configuration
 <!-- chat-id: 8d4a0f8e-8281-42a7-b67e-a8158ec5173d -->
 
 **Objective**: Update deployment settings for Render
@@ -177,7 +177,7 @@ Save to `{@artifacts_path}/plan.md`. If the feature is trivial and doesn't warra
 
 ---
 
-### [x] Step 7: End-to-End Testing and Documentation - COMPLETED
+### [ ] Step 7: End-to-End Testing and Documentation
 <!-- chat-id: 6091a8c9-3a4a-467d-9f84-ad5a5061bbe9 -->
 
 **Objective**: Verify complete user flow and document solution

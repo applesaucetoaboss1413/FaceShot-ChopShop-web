@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getCatalog, uploadFile, processJob } from '../lib/api';
+import { getCatalog, uploadFile, processJob, getPricingQuote } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,6 +10,8 @@ export default function Create() {
     const [prompt, setPrompt] = useState('');
     const [negativePrompt, setNegativePrompt] = useState('');
     const [loading, setLoading] = useState(false);
+    const [quote, setQuote] = useState(null);
+    const [loadingQuote, setLoadingQuote] = useState(false);
     const { user } = useAuth();
     const navigate = useNavigate();
 
@@ -19,6 +21,26 @@ export default function Create() {
             if (res.data.length > 0) setSelectedTool(res.data[0].key);
         });
     }, []);
+
+    useEffect(() => {
+        if (!selectedTool || !user) return;
+
+        const typeToSku = {
+            'img2vid': 'C2-30',
+            'faceswap': 'A1-IG',
+            'avatar': 'A1-IG',
+            'enhance': 'A1-IG',
+            'bgremove': 'A1-IG'
+        };
+
+        const skuCode = typeToSku[selectedTool] || 'A1-IG';
+
+        setLoadingQuote(true);
+        getPricingQuote(skuCode, 1, [])
+            .then(res => setQuote(res.data))
+            .catch(err => console.error('Quote error:', err))
+            .finally(() => setLoadingQuote(false));
+    }, [selectedTool, user]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -105,6 +127,39 @@ export default function Create() {
                             />
                         </div>
                     </>
+                )}
+
+                {quote && !loadingQuote && (
+                    <div className="mb-6 p-4 bg-blue-50 rounded border border-blue-200">
+                        <h3 className="font-bold mb-2">Pricing Estimate</h3>
+                        <p className="text-sm mb-1">
+                            <span className="font-medium">Cost:</span> ${quote.customer_price_usd}
+                        </p>
+                        <p className="text-sm mb-1">
+                            <span className="font-medium">Processing Time:</span> ~{quote.total_seconds} seconds
+                        </p>
+                        {quote.seconds_from_plan > 0 && (
+                            <p className="text-sm text-green-600">
+                                ✓ Using {quote.seconds_from_plan}s from your plan quota
+                            </p>
+                        )}
+                        {quote.overage_seconds > 0 && (
+                            <p className="text-sm text-orange-600">
+                                ⚠ ${quote.overage_cost_usd} overage charge ({quote.overage_seconds}s beyond plan)
+                            </p>
+                        )}
+                        {quote.remaining_plan_seconds !== undefined && (
+                            <p className="text-xs text-gray-500 mt-2">
+                                {quote.remaining_plan_seconds}s remaining in your monthly quota
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {loadingQuote && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200 text-center text-sm text-gray-500">
+                        Loading pricing...
+                    </div>
                 )}
 
                 <button
