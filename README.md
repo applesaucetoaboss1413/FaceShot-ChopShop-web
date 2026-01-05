@@ -109,9 +109,11 @@ Server runs on `http://localhost:3000`
 ### Start Frontend (Development)
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
-Frontend runs on `http://localhost:3001`
+Frontend runs on `http://localhost:8080` with hot reload
+
+**Note**: The frontend automatically proxies API requests to the backend during development.
 
 ## Build & Deploy
 
@@ -120,6 +122,7 @@ Frontend runs on `http://localhost:3001`
 cd frontend
 npm run build
 ```
+This creates an optimized production build in `frontend/dist/`
 
 ### Production Start
 ```bash
