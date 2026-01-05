@@ -20,10 +20,13 @@ See [`spec.md`](./spec.md) for complete technical specification.
 - Cloudinary file storage
 
 ### Frontend
-- React 19.2.3
-- React Router 7.11.0
-- Tailwind CSS 3.4.17
-- Axios HTTP client
+- **Vite** (Fast build tool)
+- **React 18.3** with TypeScript
+- **shadcn/ui** component library
+- **React Query** for data fetching
+- **Framer Motion** for animations
+- **Tailwind CSS 3.4.17**
+- Modern, professional UI/UX design
 
 ## Environment Variables
 
