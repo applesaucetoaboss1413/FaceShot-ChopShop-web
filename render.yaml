@@ -3,7 +3,7 @@ services:
     name: FaceShot-ChopShop-web
     env: node
     plan: free
-    buildCommand: "cd frontend && npm install && npx vite build"
+    buildCommand: "cd frontend && npm install && npx --yes vite@5.4.19 build"
     startCommand: "node index.js"
     envVars:
       - key: PORT
