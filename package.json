@@ -5,11 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "npm install && cd frontend && npm install && npm run build",
-    "postinstall": "cd frontend && npm install && npm run build",
-    "build-all": "cd frontend && npm install && npm run build",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "node index.js"
+    "build": "cd frontend && npm install && npm run build"
   },
   "engines": {
     "node": ">=20.0.0"
