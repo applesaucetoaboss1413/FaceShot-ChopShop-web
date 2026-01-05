@@ -25,6 +25,22 @@ export default function Dashboard() {
                     <p className="text-gray-600">Welcome, {user.email}</p>
                 </div>
                 <div className="text-right">
+                    {user.subscription ? (
+                        <div className="mb-2">
+                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded uppercase">
+                                {user.subscription.plan_name} Plan
+                            </span>
+                            <div className="text-sm text-gray-500 mt-1">
+                                {user.subscription.remaining_seconds}s quota left
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="mb-2">
+                            <Link to="/pricing" className="text-xs bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded uppercase hover:bg-gray-200">
+                                Upgrade Plan
+                            </Link>
+                        </div>
+                    )}
                     <div className="text-2xl font-mono font-bold">{credits} pts</div>
                     <Link to="/create" className="text-blue-600 hover:underline">New Creation</Link>
                 </div>

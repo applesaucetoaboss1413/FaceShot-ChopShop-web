@@ -335,7 +335,20 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, (req, res) => {
     const user = db.prepare('SELECT id, email, first_name, created_at FROM users WHERE id = ?').get(req.user.id)
     if (!user) return res.status(404).json({ error: 'user_not_found' })
-    res.json(user)
+    
+    const credits = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(req.user.id)
+    const subscription = db.prepare(`
+        SELECT s.*, p.name as plan_name 
+        FROM user_subscriptions s 
+        JOIN subscription_plans p ON s.plan_id = p.id 
+        WHERE s.user_id = ? AND s.status = 'active'
+    `).get(req.user.id)
+    
+    res.json({
+        ...user,
+        credits: credits ? credits.balance : 0,
+        subscription: subscription || null
+    })
 })
 
 app.post('/webhook/stripe', async (req, res) => {
@@ -365,161 +378,6 @@ app.post('/webhook/stripe', async (req, res) => {
         }
     }
     res.json({ received: true })
-})
-
-app.get('/api/web/catalog', (req, res) => res.json(catalogConfig.catalog))
-app.get('/api/web/packs', (req, res) => res.json(packsConfig.packs))
-
-app.post('/api/pricing/quote', authenticateToken, async (req, res) => {
-    try {
-        const { sku_code, quantity = 1, flags = [] } = req.body
-        
-        if (!sku_code) {
-            return res.status(400).json({ error: 'sku_code_required' })
-        }
-
-        const pricingEngine = new PricingEngine(db)
-        const quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags)
-        
-        res.json(quote)
-    } catch (error) {
-        logger.error({ msg: 'quote_error', error: String(error) })
-        res.status(500).json({ error: error.message })
-    }
-})
-
-app.get('/api/plans', (req, res) => {
-    const plans = db.prepare('SELECT * FROM plans WHERE active = 1 ORDER BY monthly_price_cents ASC').all()
-    res.json(plans)
-})
-
-async function getOrCreateStripeCustomer(email, userId) {
-    if (!stripe) return null
-    const customers = await stripe.customers.list({ email, limit: 1 })
-    if (customers.data.length > 0) {
-        return customers.data[0].id
-    }
-    const customer = await stripe.customers.create({ 
-        email,
-        metadata: { user_id: String(userId) }
-    })
-    return customer.id
-}
-
-app.post('/api/subscribe', authenticateToken, async (req, res) => {
-    try {
-        if (!stripe) return res.status(400).json({ error: 'stripe_not_configured' })
-        
-        const { plan_id } = req.body
-        const plan = db.prepare('SELECT * FROM plans WHERE id = ? AND active = 1').get(plan_id)
-        
-        if (!plan) return res.status(400).json({ error: 'invalid_plan' })
-
-        const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id)
-        
-        const customerId = await getOrCreateStripeCustomer(user.email, req.user.id)
-        if (!customerId) return res.status(400).json({ error: 'stripe_customer_error' })
-
-        const subscription = await stripe.subscriptions.create({
-            customer: customerId,
-            items: [{
-                price_data: {
-                    currency: 'usd',
-                    product_data: { name: `${plan.name} Plan` },
-                    recurring: { interval: 'month' },
-                    unit_amount: plan.monthly_price_cents
-                }
-            }],
-            metadata: {
-                user_id: String(req.user.id),
-                plan_id: plan.id
-            }
-        })
-
-        const now = new Date().toISOString()
-        const endDate = new Date()
-        endDate.setMonth(endDate.getMonth() + 1)
-
-        db.prepare(`
-            INSERT INTO user_plans (user_id, plan_id, start_date, end_date, stripe_subscription_id, status, created_at)
-            VALUES (?, ?, ?, ?, ?, 'active', ?)
-        `).run(req.user.id, plan.id, now, endDate.toISOString(), subscription.id, now)
-
-        res.json({ subscription_id: subscription.id, status: 'active' })
-    } catch (error) {
-        logger.error({ msg: 'subscribe_error', error: String(error) })
-        res.status(500).json({ error: 'subscription_failed' })
-    }
-})
-
-app.post('/api/orders/create', authenticateToken, async (req, res) => {
-    try {
-        const { sku_code, quantity = 1, flags = [] } = req.body
-        
-        if (!sku_code) {
-            return res.status(400).json({ error: 'sku_code_required' })
-        }
-
-        const pricingEngine = new PricingEngine(db)
-        let quote
-        try {
-            quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags)
-        } catch (quoteError) {
-            logger.error({ msg: 'order_quote_error', error: String(quoteError) })
-            return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
-        }
-
-        const orderResult = db.prepare(`
-            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-        `).run(
-            req.user.id,
-            sku_code,
-            quantity,
-            JSON.stringify(quote.applied_flags),
-            quote.customer_price_cents,
-            quote.internal_cost_cents,
-            parseFloat(quote.margin_percent),
-            quote.total_seconds,
-            quote.overage_seconds,
-            new Date().toISOString()
-        )
-
-        res.json({ 
-            order_id: orderResult.lastInsertRowid,
-            quote
-        })
-    } catch (error) {
-        logger.error({ msg: 'order_create_error', error: String(error) })
-        res.status(500).json({ error: 'order_creation_failed', details: error.message })
-    }
-})
-
-
-
-app.post('/api/web/checkout', authenticateToken, async (req, res) => {
-    try {
-        if (!stripe) return res.status(400).json({ error: 'stripe_not_configured' })
-        const { pack_type } = req.body || {}
-        const pack = packsConfig.packs.find(p => p.type === pack_type)
-        if (!pack) return res.status(400).json({ error: 'invalid_pack' })
-        
-        const session = await stripe.checkout.sessions.create({
-            mode: 'payment',
-            client_reference_id: String(req.user.id),
-            metadata: { points: String(pack.points), pack_type: pack.type, source: 'web', user_id: String(req.user.id) },
-            line_items: [{
-                price_data: { currency: 'usd', product_data: { name: `Pack ${pack.type}` }, unit_amount: pack.price_cents },
-                quantity: 1
-            }],
-            success_url: `${process.env.FRONTEND_URL}/status?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.FRONTEND_URL}/pricing`
-        })
-        res.json({ id: session.id, url: session.url })
-    } catch (e) {
-        logger.error({ msg: 'checkout_error', error: String(e) })
-        res.status(500).json({ error: 'checkout_failed' })
-    }
 })
 
 app.get('/api/web/credits', authenticateToken, (req, res) => {
@@ -670,8 +528,26 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
 })
 
 if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, 'frontend/build')))
-    app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'frontend/build', 'index.html')))
+    const buildPath = path.join(__dirname, 'frontend/build')
+    logger.info('Starting production server with build path: ' + buildPath)
+    
+    if (fs.existsSync(buildPath)) {
+        app.use(express.static(buildPath))
+        app.get('*', (req, res) => {
+            const indexPath = path.join(buildPath, 'index.html')
+            if (fs.existsSync(indexPath)) {
+                res.sendFile(indexPath)
+            } else {
+                logger.error('CRITICAL: index.html missing from build folder')
+                res.status(404).send('Frontend index.html missing. Check build logs.')
+            }
+        })
+    } else {
+        logger.error('CRITICAL: frontend/build directory missing')
+        app.get('*', (req, res) => {
+            res.status(500).send('Frontend build missing. Ensure build command was successful.')
+        })
+    }
 }
 
 const PORT = process.env.PORT || 3000

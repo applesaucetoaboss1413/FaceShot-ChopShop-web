@@ -3,7 +3,7 @@ services:
     name: FaceShot-ChopShop-web
     env: node
     plan: free
-    buildCommand: "npm install && cd frontend && npm install && npm run build"
+    buildCommand: "npm run build-all"
     startCommand: "npm start"
     envVars:
       - key: PORT

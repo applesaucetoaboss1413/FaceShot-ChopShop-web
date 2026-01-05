@@ -48,7 +48,7 @@ export default function Create() {
         setLoading(true);
         try {
             // 1. Upload
-            await uploadFile(file, selectedTool, user.id);
+            await uploadFile(file, selectedTool);
             // 2. Process
             const options = selectedTool === 'img2vid' ? { prompt, negative_prompt: negativePrompt } : {};
             const { data } = await processJob(selectedTool, options);
