@@ -3,11 +3,11 @@ services:
     name: FaceShot-ChopShop-web
     env: node
     plan: free
-    buildCommand: "npm run build-all"
+    buildCommand: "npm run build"
     startCommand: "npm start"
     envVars:
       - key: PORT
-        value: 10000
+        value: 3000
       - key: NODE_ENV
         value: production
       - key: SESSION_SECRET
