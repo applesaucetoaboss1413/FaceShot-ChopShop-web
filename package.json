@@ -4,7 +4,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "render-build": "cd frontend && npm install && npm run build"
   },
   "engines": {
     "node": ">=20.0.0"
