@@ -38,12 +38,15 @@ Update the Render service configuration in the dashboard to use the correct buil
 ### [x] Step: Planning
 Analysis complete and plan created.
 
-### [ ] Step: Verify Current Configuration
-<!-- chat-id: 859f5acb-8f62-42da-98dd-03e6e439e209 -->
-Confirm the issue by checking:
-1. The `render.yaml` file has the correct build command (already verified: line 6)
-2. The server code expects to serve from `frontend/build/` directory (already verified: index.js:672-675)
-3. Document findings
+### [x] Step: Update package.json Build Script
+Updated root `package.json` build script from `"echo Building backend"` to `"cd frontend && npm install && npm run build"`. This ensures that if `npm run build` is called (either manually or via CI/CD), it will properly build the frontend.
+
+### [x] Step: Verify Current Configuration
+Confirmed the issue by checking:
+1. ✓ The `render.yaml` file has the correct build command (line 6)
+2. ✓ The server code expects to serve from `frontend/build/` directory (index.js:673-674)
+3. ✓ The root `package.json` now has the correct build script
+4. ✓ Issue confirmed: Render dashboard is using `npm install` instead of the full build command
 
 ### [ ] Step: Update Render Dashboard Configuration
 <!-- chat-id: 202af136-1268-4cf2-998b-7bd9b4d9be37 -->
@@ -64,6 +67,7 @@ Confirm the issue by checking:
 - The service is set to "Infrastructure as Code" mode in Render settings
 
 ### [ ] Step: Verify Deployment
+<!-- chat-id: 9e3aa1ed-6a16-47a5-aef0-278dc8522d45 -->
 
 After updating the build command:
 1. Monitor the build logs to confirm the frontend build runs
