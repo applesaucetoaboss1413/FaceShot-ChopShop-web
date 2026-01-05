@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { getCatalog, uploadFile, processJob, getPricingQuote } from '../lib/api';
+import { getCatalog, uploadFile, processJob, getPricingQuote, getSKUs } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Create() {
     const [catalog, setCatalog] = useState([]);
@@ -12,35 +12,62 @@ export default function Create() {
     const [loading, setLoading] = useState(false);
     const [quote, setQuote] = useState(null);
     const [loadingQuote, setLoadingQuote] = useState(false);
+    const [selectedSku, setSelectedSku] = useState(null);
+    const [quantity, setQuantity] = useState(1);
     const { user } = useAuth();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
 
     useEffect(() => {
+        const skuParam = searchParams.get('sku');
+        
+        if (skuParam) {
+            getSKUs().then(res => {
+                if (res.data && res.data.skus) {
+                    const sku = res.data.skus.find(s => s.code === skuParam);
+                    if (sku) {
+                        setSelectedSku(sku);
+                    }
+                }
+            }).catch(console.error);
+        }
+        
         getCatalog().then(res => {
             setCatalog(res.data);
             if (res.data.length > 0) setSelectedTool(res.data[0].key);
         });
-    }, []);
+    }, [searchParams]);
 
     useEffect(() => {
-        if (!selectedTool || !user) return;
-
-        const typeToSku = {
-            'img2vid': 'C2-30',
-            'faceswap': 'A1-IG',
-            'avatar': 'A1-IG',
-            'enhance': 'A1-IG',
-            'bgremove': 'A1-IG'
-        };
-
-        const skuCode = typeToSku[selectedTool] || 'A1-IG';
+        if (!user) return;
+        
+        let skuCode;
+        
+        if (selectedSku) {
+            skuCode = selectedSku.code;
+        } else if (selectedTool) {
+            const typeToSku = {
+                'img2vid': 'C2-30',
+                'faceswap': 'A1-IG',
+                'avatar': 'A1-IG',
+                'enhance': 'A1-IG',
+                'bgremove': 'A1-IG'
+            };
+            skuCode = typeToSku[selectedTool] || 'A1-IG';
+        }
+        
+        if (!skuCode) return;
 
         setLoadingQuote(true);
-        getPricingQuote(skuCode, 1, [])
-            .then(res => setQuote(res.data))
+        getPricingQuote(skuCode, quantity, [])
+            .then(res => {
+                if (res.data && res.data.quote) {
+                    setQuote(res.data.quote);
+                }
+            })
             .catch(err => console.error('Quote error:', err))
             .finally(() => setLoadingQuote(false));
-    }, [selectedTool, user]);
+    }, [selectedTool, selectedSku, quantity, user]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -48,7 +75,7 @@ export default function Create() {
         setLoading(true);
         try {
             // 1. Upload
-            await uploadFile(file, selectedTool, user.id);
+            await uploadFile(file, selectedTool);
             // 2. Process
             const options = selectedTool === 'img2vid' ? { prompt, negative_prompt: negativePrompt } : {};
             const { data } = await processJob(selectedTool, options);
@@ -64,22 +91,33 @@ export default function Create() {
 
     return (
         <div className="p-8 max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6">Create New</h1>
+            <h1 className="text-3xl font-bold mb-6">
+                {selectedSku ? selectedSku.name : 'Create New'}
+            </h1>
+            
+            {selectedSku && (
+                <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded">
+                    <p className="text-sm text-gray-700">{selectedSku.description}</p>
+                    <p className="text-xs text-gray-500 mt-2">SKU: {selectedSku.code}</p>
+                </div>
+            )}
 
-            <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-                {catalog.map(tool => (
-                    <button
-                        key={tool.key}
-                        onClick={() => setSelectedTool(tool.key)}
-                        className={`px-4 py-2 rounded whitespace-nowrap ${selectedTool === tool.key
-                                ? 'bg-black text-white'
-                                : 'bg-gray-100 hover:bg-gray-200'
-                            }`}
-                    >
-                        {tool.name}
-                    </button>
-                ))}
-            </div>
+            {!selectedSku && (
+                <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+                    {catalog.map(tool => (
+                        <button
+                            key={tool.key}
+                            onClick={() => setSelectedTool(tool.key)}
+                            className={`px-4 py-2 rounded whitespace-nowrap ${selectedTool === tool.key
+                                    ? 'bg-black text-white'
+                                    : 'bg-gray-100 hover:bg-gray-200'
+                                }`}
+                        >
+                            {tool.name}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             <form onSubmit={handleSubmit} className="border p-8 rounded-lg shadow-sm">
                 <h2 className="text-xl font-bold mb-4 capitalize">

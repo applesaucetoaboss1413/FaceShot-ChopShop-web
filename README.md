@@ -1,6 +1,18 @@
 # FaceShop-ChopShop Platform
 
-A dual-layer AI media processing platform combining A2E API integration with enterprise pricing and subscription management.
+A dual-layer AI media processing SaaS platform combining A2E API integration with enterprise pricing and subscription management.
+
+**Status**: ✅ **Production Ready** - Ready to deploy and make money!
+
+## Quick Start
+
+### Deploy to Production (20 minutes)
+1. **Preview**: Click Preview button to test
+2. **Deploy**: Click Deploy button
+3. **Configure**: See [`PRE_DEPLOYMENT_CHECKLIST.md`](./PRE_DEPLOYMENT_CHECKLIST.md)
+4. **Launch**: Get your live URL and start selling!
+
+📚 **Full deployment guide**: [`DEPLOYMENT.md`](./DEPLOYMENT.md)
 
 ## Architecture
 
@@ -20,10 +32,13 @@ See [`spec.md`](./spec.md) for complete technical specification.
 - Cloudinary file storage
 
 ### Frontend
-- React 19.2.3
-- React Router 7.11.0
-- Tailwind CSS 3.4.17
-- Axios HTTP client
+- **Vite** (Fast build tool)
+- **React 18.3** with TypeScript
+- **shadcn/ui** component library
+- **React Query** for data fetching
+- **Framer Motion** for animations
+- **Tailwind CSS 3.4.17**
+- Modern, professional UI/UX design
 
 ## Environment Variables
 
@@ -106,9 +121,11 @@ Server runs on `http://localhost:3000`
 ### Start Frontend (Development)
 ```bash
 cd frontend
-npm start
+npm run dev
 ```
-Frontend runs on `http://localhost:3001`
+Frontend runs on `http://localhost:8080` with hot reload
+
+**Note**: The frontend automatically proxies API requests to the backend during development.
 
 ## Build & Deploy
 
@@ -117,6 +134,7 @@ Frontend runs on `http://localhost:3001`
 cd frontend
 npm run build
 ```
+This creates an optimized production build in `frontend/dist/`
 
 ### Production Start
 ```bash

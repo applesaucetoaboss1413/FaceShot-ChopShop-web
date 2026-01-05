@@ -40,7 +40,10 @@ export const getJobStatus = (id) => api.get(`/api/web/status?id=${id}`);
 export const getPricingQuote = (skuCode, quantity = 1, flags = []) => 
     api.post('/api/pricing/quote', { sku_code: skuCode, quantity, flags });
 export const getPlans = () => api.get('/api/plans');
+export const getVectors = () => api.get('/api/vectors');
+export const getSKUs = (vectorId = null) => api.get('/api/skus' + (vectorId ? `?vector_id=${vectorId}` : ''));
 export const subscribe = (planId) => api.post('/api/subscribe', { plan_id: planId });
+export const getAccountPlan = () => api.get('/api/account/plan');
 export const createOrder = (skuCode, quantity = 1, flags = []) =>
     api.post('/api/orders/create', { sku_code: skuCode, quantity, flags });
 
