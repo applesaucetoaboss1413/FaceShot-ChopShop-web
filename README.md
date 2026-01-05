@@ -1,6 +1,18 @@
 # FaceShop-ChopShop Platform
 
-A dual-layer AI media processing platform combining A2E API integration with enterprise pricing and subscription management.
+A dual-layer AI media processing SaaS platform combining A2E API integration with enterprise pricing and subscription management.
+
+**Status**: ✅ **Production Ready** - Ready to deploy and make money!
+
+## Quick Start
+
+### Deploy to Production (20 minutes)
+1. **Preview**: Click Preview button to test
+2. **Deploy**: Click Deploy button
+3. **Configure**: See [`PRE_DEPLOYMENT_CHECKLIST.md`](./PRE_DEPLOYMENT_CHECKLIST.md)
+4. **Launch**: Get your live URL and start selling!
+
+📚 **Full deployment guide**: [`DEPLOYMENT.md`](./DEPLOYMENT.md)
 
 ## Architecture
 
