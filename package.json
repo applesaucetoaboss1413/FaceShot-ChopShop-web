@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "render-build": "cd frontend && npm install --include=dev && npm run build"
+    "render-build": "cd frontend && rm -rf node_modules package-lock.json && npm install --include=dev && npm run build"
   },
   "engines": {
     "node": ">=20.0.0"
