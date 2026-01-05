@@ -11,8 +11,14 @@ export function HeroSection() {
   useEffect(() => {
     api.getStats().then((result) => {
       if (result.success && result.data) {
-        setStats(result.data);
+        // Map API response fields to our expected format
+        setStats({
+          totalCreations: result.data.videos ?? 0,
+          totalUsers: result.data.total_users ?? 0,
+        });
       }
+    }).catch(() => {
+      // Keep default values on error
     });
   }, []);
 
