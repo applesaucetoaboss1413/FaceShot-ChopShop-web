@@ -949,7 +949,7 @@ app.get('/api/admin/flags', authenticateToken, isAdmin, (req, res) => {
 })
 
 if (process.env.NODE_ENV === 'production') {
-    const buildPath = path.join(__dirname, 'frontend/build')
+    const buildPath = path.join(__dirname, 'frontend/dist')
     logger.info('Starting production server with build path: ' + buildPath)
     
     if (fs.existsSync(buildPath)) {
@@ -959,12 +959,12 @@ if (process.env.NODE_ENV === 'production') {
             if (fs.existsSync(indexPath)) {
                 res.sendFile(indexPath)
             } else {
-                logger.error('CRITICAL: index.html missing from build folder')
+                logger.error('CRITICAL: index.html missing from dist folder')
                 res.status(404).send('Frontend index.html missing. Check build logs.')
             }
         })
     } else {
-        logger.error('CRITICAL: frontend/build directory missing')
+        logger.error('CRITICAL: frontend/dist directory missing')
         app.get('*', (req, res) => {
             res.status(500).send('Frontend build missing. Ensure build command was successful.')
         })
