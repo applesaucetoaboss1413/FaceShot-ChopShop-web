@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Environment Variable Setup Helper for Production Deployment
+# Run this to generate a secure SESSION_SECRET and see environment variable checklist
+
+echo "=================================================="
+echo "FaceShot-ChopShop Production Deployment Setup"
+echo "=================================================="
+echo ""
+
+# Generate a secure SESSION_SECRET
+echo "✅ STEP 1: Generate Secure SESSION_SECRET"
+echo "--------------------------------------------------"
+SESSION_SECRET=$(openssl rand -base64 32 2>/dev/null || cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+echo "Generated SESSION_SECRET:"
+echo "$SESSION_SECRET"
+echo ""
+echo "⚠️  SAVE THIS - You'll need it for deployment!"
+echo ""
+
+# Environment Variables Checklist
+echo "✅ STEP 2: Environment Variables Checklist"
+echo "--------------------------------------------------"
+echo "Copy these values when deploying:"
+echo ""
+echo "Required Variables:"
+echo "  [ ] SESSION_SECRET=$SESSION_SECRET"
+echo "  [ ] A2E_API_KEY=[get from https://a2e.ai]"
+echo "  [ ] STRIPE_SECRET_KEY=[get from https://dashboard.stripe.com/apikeys]"
+echo "  [ ] STRIPE_WEBHOOK_SECRET=[configure AFTER deployment]"
+echo "  [ ] CLOUDINARY_CLOUD_NAME=[get from https://cloudinary.com/console]"
+echo "  [ ] CLOUDINARY_API_KEY=[get from https://cloudinary.com/console]"
+echo "  [ ] CLOUDINARY_API_SECRET=[get from https://cloudinary.com/console]"
+echo "  [ ] ADMIN_EMAILS=[your-email@domain.com]"
+echo ""
+echo "Optional Variables (defaults are fine):"
+echo "  [ ] NODE_ENV=production"
+echo "  [ ] COST_PER_CREDIT=0.0111"
+echo "  [ ] MIN_MARGIN=0.40"
+echo "  [ ] LOG_LEVEL=info"
+echo ""
+
+echo "✅ STEP 3: After Deployment"
+echo "--------------------------------------------------"
+echo "1. Configure Stripe Webhook:"
+echo "   - Go to: https://dashboard.stripe.com/webhooks"
+echo "   - Add endpoint: https://your-deployed-url/webhook/stripe"
+echo "   - Select event: checkout.session.completed"
+echo "   - Copy webhook secret and update STRIPE_WEBHOOK_SECRET"
+echo ""
+echo "2. Test the deployment:"
+echo "   - Visit your deployed URL"
+echo "   - Create test account"
+echo "   - Test with Stripe test card: 4242 4242 4242 4242"
+echo ""
+
+echo "✅ Ready to Deploy!"
+echo "=================================================="
+echo ""
+echo "Next Steps:"
+echo "1. Click 'Preview' button to test locally first"
+echo "2. Click 'Deploy' button in Emergent interface"
+echo "3. Paste the environment variables above"
+echo "4. Wait 10-15 minutes for deployment"
+echo "5. Configure Stripe webhook with your live URL"
+echo ""
+echo "📚 See DEPLOYMENT.md for complete guide"
+echo "=================================================="
