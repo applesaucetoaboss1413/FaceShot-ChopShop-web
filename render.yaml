@@ -3,6 +3,7 @@ services:
     name: FaceShot-ChopShop-web
     env: node
     plan: free
+    rootDir: FaceShot-ChopShop-web
     buildCommand: "npm run build-all"
     startCommand: "npm start"
     envVars:
