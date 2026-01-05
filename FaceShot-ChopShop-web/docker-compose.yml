@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: faceshot-chopshop
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./production.db:/app/production.db
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/production.db
+      - PORT=3000
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
