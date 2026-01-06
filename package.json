@@ -1,27 +1,40 @@
 {
-  "name": "faceshot-chopshop-backend",
-  "version": "0.1.1",
-  "private": true,
+  "name": "faceshot-chopshop",
+  "version": "1.0.0",
+  "description": "Backend server for FaceShot-ChopShop",
   "main": "index.js",
   "scripts": {
+    "render-build": "npm install && cd frontend && npm install && npm run build",
     "start": "node index.js",
-    "render-build": "cd frontend && rm -rf node_modules package-lock.json && npm install --include=dev && npm run build"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
+    "body-parser": "^1.20.2",
     "cloudinary": "^2.5.1",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "stripe": "^14.0.0",
     "winston": "^3.13.0"
-  }
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/applesaucetoaboss1413/FaceShot-ChopShop-web.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/applesaucetoaboss1413/FaceShot-ChopShop-web/issues"
+  },
+  "homepage": "https://github.com/applesaucetoaboss1413/FaceShot-ChopShop-web#readme"
 }

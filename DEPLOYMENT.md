@@ -27,7 +27,7 @@ Before deploying, ensure you have:
 ### 2. **Click Preview Button First**
 
 Before deploying:
-1. Click **Preview** in Emergent interface
+1. Click **Preview** in your hosting provider's interface
 2. Test these critical flows:
    - ✅ Landing page loads
    - ✅ User signup/login
@@ -40,7 +40,7 @@ Before deploying:
 
 ### 3. **Deploy to Production**
 
-1. **Click Deploy Button** in Emergent interface
+1. **Click Deploy Button** in your hosting provider's interface
 2. **Configure Environment Variables** when prompted:
 
 ```env
@@ -64,7 +64,7 @@ LOG_LEVEL=info
 
 3. **Click "Deploy Now"**
 4. **Wait 10-15 minutes** for deployment to complete
-5. **Receive your live URL** (e.g., https://your-app.emergent.ai)
+5. **Receive your live URL** from your hosting provider
 
 ---
 
@@ -76,7 +76,7 @@ Once deployed, you need to set up the Stripe webhook endpoint:
 
 1. Go to https://dashboard.stripe.com/webhooks
 2. Click **"Add endpoint"**
-3. Enter your webhook URL: `https://your-deployed-url.emergent.ai/webhook/stripe`
+3. Enter your webhook URL: `https://your-deployed-url/webhook/stripe`
 4. Select events to listen for:
    - ✅ `checkout.session.completed`
 5. Copy the **Webhook Signing Secret**
@@ -170,7 +170,7 @@ After deployment, test these critical flows:
 ## 🎯 Cost & Pricing Overview
 
 ### Deployment Costs
-- **Emergent Hosting**: 50 credits/month
+- **Hosting**: Platform-specific (see your provider's pricing)
 - **Your Costs**: A2E API usage + Stripe fees (1-3%)
 
 ### Revenue Model
@@ -191,7 +191,7 @@ Before going live:
 - [ ] Verify Stripe webhook signature validation works
 - [ ] Set strong admin email password
 - [ ] Review Cloudinary security settings
-- [ ] Enable HTTPS (handled by Emergent automatically)
+- [ ] Enable HTTPS (handled by your hosting provider automatically)
 - [ ] Test rate limiting is working
 - [ ] Review CORS settings
 
@@ -261,9 +261,9 @@ Before going live:
 
 If something goes wrong after deployment:
 
-1. **Rollback Feature**: Emergent supports rollback to previous stable version
+1. **Rollback Feature**: Many hosting providers support rollback to a previous stable version
 2. **Cost**: No additional charge for rollback
-3. **Process**: Contact Emergent support or use rollback button
+3. **Process**: Use your hosting provider's rollback tooling or deployment history
 4. **Database**: SQLite file persists, so no data loss
 
 ---
@@ -305,7 +305,7 @@ If something goes wrong after deployment:
 
 ## 📞 Support Resources
 
-- **Emergent Support**: Use support_agent in chat for platform questions
+- **Hosting Platform**: Refer to your provider's support documentation
 - **Stripe Docs**: https://stripe.com/docs
 - **A2E Docs**: https://a2e.ai/docs
 - **Cloudinary Docs**: https://cloudinary.com/documentation
@@ -333,5 +333,4 @@ Your app is **100% ready for production**:
 ---
 
 **Last Updated**: January 5, 2025  
-**App Version**: 2.0 (Modern Frontend + Complete Pricing System)  
-**Deployment Platform**: Emergent
+**App Version**: 2.0 (Modern Frontend + Complete Pricing System)

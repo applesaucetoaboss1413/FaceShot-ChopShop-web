@@ -100,7 +100,7 @@ DB_PATH=production.db
 ## ✅ Step-by-Step Deployment Process
 
 ### Step 1: Preview First (5 minutes)
-1. Click **Preview** button in Emergent
+103→1. Click **Preview** button in your hosting provider's dashboard
 2. Wait for preview to load
 3. Test these:
    - [ ] Landing page loads
@@ -110,7 +110,7 @@ DB_PATH=production.db
 4. If preview works → proceed to deployment
 
 ### Step 2: Click Deploy (10-15 minutes)
-1. Click **Deploy** button in Emergent
+113→1. Click **Deploy** button in your hosting provider's dashboard
 2. When prompted for environment variables:
    - Copy/paste from the section above
    - Replace placeholder values with your real API keys
@@ -120,13 +120,13 @@ DB_PATH=production.db
 5. You'll receive a live URL
 
 ### Step 3: Configure Stripe Webhook (2 minutes)
-1. Copy your deployed URL (e.g., `https://your-app.emergent.ai`)
+1. Copy your deployed URL (e.g., `https://your-app.example.com`)
 2. Go to https://dashboard.stripe.com/webhooks
 3. Click **"Add endpoint"**
-4. Paste: `https://your-app.emergent.ai/webhook/stripe`
+4. Paste: `https://your-app.example.com/webhook/stripe`
 5. Select event: `checkout.session.completed`
 6. Copy the **webhook signing secret**
-7. Update `STRIPE_WEBHOOK_SECRET` environment variable in Emergent
+7. Update `STRIPE_WEBHOOK_SECRET` environment variable in your hosting provider dashboard
 
 ### Step 4: Test Production (10 minutes)
 1. Visit your deployed URL
@@ -158,8 +158,8 @@ DB_PATH=production.db
 - Try refreshing the page
 
 ### Deploy button greyed out
-- Make sure preview works first
-- Check you have enough Emergent credits (50 credits/month)
+161→- Make sure preview works first
+162→- Check you have enough hosting credits or quota
 
 ### Stripe webhook fails
 - Make sure you used the LIVE mode webhook secret
@@ -183,7 +183,7 @@ DB_PATH=production.db
 ### Monthly Costs
 
 **Infrastructure**:
-- Emergent Hosting: **50 credits/month**
+- Hosting: **platform-specific monthly cost**
 
 **External Services** (your costs):
 - A2E API: **$19.99/month** + usage credits
@@ -241,9 +241,9 @@ After deployment, track these:
 ---
 
 ## 📞 Support Contacts
-
-- **Emergent Platform**: Use support_agent in chat
-- **Stripe Support**: https://support.stripe.com
+244→
+245→- **Hosting Platform**: Refer to your provider's support documentation
+246→- **Stripe Support**: https://support.stripe.com
 - **A2E Support**: support@a2e.ai
 - **Cloudinary Support**: https://support.cloudinary.com
 
@@ -275,5 +275,4 @@ If anything needs fixing after deployment, just let me know and we'll fix it imm
 ---
 
 **Generated**: January 5, 2025  
-**Deployment Platform**: Emergent  
 **App Version**: 2.0 (Production Ready)

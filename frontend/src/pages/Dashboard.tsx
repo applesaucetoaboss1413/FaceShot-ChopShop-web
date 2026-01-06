@@ -65,7 +65,7 @@ export default function Dashboard() {
   const [credits, setCredits] = useState(user?.credits || 0);
 
   // Fetch user credits and history on mount
-  useState(() => {
+  useEffect(() => {
     api.getCredits().then((result) => {
       if (result.success && result.data) {
         setCredits(result.data.balance);
@@ -79,7 +79,7 @@ export default function Dashboard() {
         setJobs(items);
       }
     });
-  });
+  }, []);
 
   const handleFileUpload = useCallback((
     e: React.ChangeEvent<HTMLInputElement>,

@@ -146,7 +146,7 @@ MAX_JOB_SECONDS=5000
 ```
 
 #### Test Evidence in Report
-**File**: `.zenflow/tasks/new-task-1b73/report.md:349-609`
+**File**: `internal-tasks/new-task-1b73/report.md:349-609`
 
 **Added Section**: "Phase 0-1: A2E Integration - Test Evidence"
 - Step 4: Status and Creations endpoints verification
@@ -294,7 +294,7 @@ $ node -c services/pricing.js
 1. `index.js` - Added `/api/orders/create`, updated `/api/web/process`
 2. `frontend/src/lib/api.js` - Added `createOrder()` function
 3. `scripts/.env.example` - Added Phase 2 env vars + JWT_SECRET
-4. `.zenflow/tasks/new-task-1b73/report.md` - Added test evidence section
+4. `internal-tasks/new-task-1b73/report.md` - Added test evidence section
 
 ### Unchanged Files
 - `services/a2e.js` - A2E API client
