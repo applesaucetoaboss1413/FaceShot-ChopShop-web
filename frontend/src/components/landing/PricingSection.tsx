@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 
 const plans = [
   {
+    id: 'starter',
     name: 'Starter',
     price: 9,
     credits: 50,
@@ -19,6 +20,7 @@ const plans = [
     popular: false,
   },
   {
+    id: 'pro',
     name: 'Pro',
     price: 29,
     credits: 200,
@@ -34,6 +36,7 @@ const plans = [
     popular: true,
   },
   {
+    id: 'enterprise',
     name: 'Enterprise',
     price: 99,
     credits: 1000,
@@ -132,7 +135,7 @@ export function PricingSection() {
                 ))}
               </ul>
 
-              <Link to="/signup">
+              <Link to={`/signup?plan=${plan.id}`}>
                 <Button 
                   variant={plan.popular ? 'hero' : 'outline'} 
                   className="w-full"

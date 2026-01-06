@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 
 const navLinks = [
-  { href: '/#features', label: 'Features' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/#faq', label: 'FAQ' },
+  { href: '/#face-swap', label: 'Face Swap' },
+  { href: '/#ai-avatars', label: 'AI Avatars' },
+  { href: '/#image-to-video', label: 'Image to Video' },
+  { href: '/#one-click-magic', label: 'One-Click Magic' },
+  { href: '/#secure-private', label: 'Secure & Private' },
+  { href: '/#pricing', label: 'Pricing' },
 ];
 
 export function Navbar() {
