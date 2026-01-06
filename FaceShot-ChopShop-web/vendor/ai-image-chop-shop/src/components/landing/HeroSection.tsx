@@ -123,14 +123,14 @@ export function HeroSection() {
           >
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold gradient-text">
-                {stats.totalCreations.toLocaleString()}+
+                {(stats.totalCreations ?? 0).toLocaleString()}+
               </div>
               <div className="text-sm text-muted-foreground mt-1">Creations Made</div>
             </div>
             <div className="w-px h-12 bg-border" />
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold gradient-text">
-                {stats.totalUsers.toLocaleString()}+
+                {(stats.totalUsers ?? 0).toLocaleString()}+
               </div>
               <div className="text-sm text-muted-foreground mt-1">Happy Users</div>
             </div>
