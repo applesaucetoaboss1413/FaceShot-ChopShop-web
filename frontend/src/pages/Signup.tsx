@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, User, Zap, ArrowRight, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,15 +14,30 @@ const benefits = [
   'Access all AI features',
 ];
 
+const planNames: Record<string, string> = {
+  starter: 'Starter Plan ($9 - 50 credits)',
+  pro: 'Pro Plan ($29 - 200 credits)',
+  enterprise: 'Enterprise Plan ($99 - 1000 credits)',
+};
+
 export default function SignupPage() {
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const { signup } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const plan = searchParams.get('plan');
+    if (plan && planNames[plan]) {
+      setSelectedPlan(plan);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +123,13 @@ export default function SignupPage() {
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold mb-2">Create Your Account</h1>
             <p className="text-muted-foreground">Start creating amazing content today</p>
+            {selectedPlan && (
+              <div className="mt-3 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
+                <p className="text-sm font-medium text-primary">
+                  Selected: {planNames[selectedPlan]}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Benefits */}
