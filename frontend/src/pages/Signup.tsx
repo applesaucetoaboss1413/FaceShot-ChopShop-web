@@ -41,6 +41,7 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[SignupPage] Submit clicked', { email });
     
     if (password.length < 6) {
       toast({
@@ -56,12 +57,14 @@ export default function SignupPage() {
     const result = await signup(email, password, name);
     
     if (result.success) {
+      console.log('[SignupPage] Signup successful, navigating to dashboard');
       toast({
         title: 'Account created!',
         description: 'Welcome to FaceShot-ChopShop.',
       });
       navigate('/dashboard');
     } else {
+      console.warn('[SignupPage] Signup failed', { email, error: result.error });
       toast({
         title: 'Signup failed',
         description: result.error || 'Something went wrong. Please try again.',

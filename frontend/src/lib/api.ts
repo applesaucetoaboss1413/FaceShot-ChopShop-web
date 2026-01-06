@@ -56,11 +56,22 @@ interface SignupPayload extends LoginPayload {
 
 interface PricingPlan {
   id: string;
+  code: string;
   name: string;
-  credits: number;
-  price: number;
-  stripePriceId: string;
+  monthlyPriceUsd: number;
+  includedSeconds: number;
+  description: string;
 }
+
+type BackendPlan = {
+  id: unknown;
+  code: unknown;
+  name: unknown;
+  monthly_price_usd?: unknown;
+  monthly_price_cents?: unknown;
+  included_seconds?: unknown;
+  description?: unknown;
+};
 
 class ApiClient {
   private baseUrl: string;
@@ -88,6 +99,9 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
+    const method = options.method || 'GET';
+    console.log('[ApiClient] Request start', { endpoint, method });
+
     const url = `${this.baseUrl}${endpoint}`;
     
     const headers: HeadersInit = {
@@ -104,7 +118,7 @@ class ApiClient {
         ...options,
         headers,
       });
-
+      console.log('[ApiClient] Response received', { endpoint, method, status: response.status });
       const data = await response.json();
 
       if (!response.ok) {
@@ -119,6 +133,7 @@ class ApiClient {
         data,
       };
     } catch (error) {
+      console.error('[ApiClient] Request error', { endpoint, method, error });
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Network error',
@@ -128,6 +143,7 @@ class ApiClient {
 
   // Auth endpoints
   async login(payload: LoginPayload): Promise<ApiResponse<{ token: string; user: User }>> {
+    console.log('[AuthApi] Login start', { email: payload.email });
     const result = await this.request<{ token: string; user: User }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -135,12 +151,16 @@ class ApiClient {
 
     if (result.success && result.data?.token) {
       this.setToken(result.data.token);
+      console.log('[AuthApi] Login success, token stored');
+    } else {
+      console.warn('[AuthApi] Login failed', { error: result.error });
     }
 
     return result;
   }
 
   async signup(payload: SignupPayload): Promise<ApiResponse<{ token: string; user: User }>> {
+    console.log('[AuthApi] Signup start', { email: payload.email });
     const result = await this.request<{ token: string; user: User }>('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -148,6 +168,9 @@ class ApiClient {
 
     if (result.success && result.data?.token) {
       this.setToken(result.data.token);
+      console.log('[AuthApi] Signup success, token stored');
+    } else {
+      console.warn('[AuthApi] Signup failed', { error: result.error });
     }
 
     return result;
@@ -183,14 +206,53 @@ class ApiClient {
   }
 
   async getPricingPlans(): Promise<ApiResponse<PricingPlan[]>> {
-    return this.request<PricingPlan[]>('/api/plans');
+    const result = await this.request<{ plans: BackendPlan[] }>('/api/plans');
+
+    if (!result.success || !result.data) {
+      return {
+        success: false,
+        error: result.error || 'Failed to load pricing plans',
+      };
+    }
+
+    const plans = Array.isArray(result.data.plans) ? result.data.plans : [];
+
+    const normalized: PricingPlan[] = plans.map((plan) => ({
+      id: String(plan.id),
+      code: String(plan.code),
+      name: String(plan.name),
+      monthlyPriceUsd: plan.monthly_price_usd
+        ? parseFloat(String(plan.monthly_price_usd))
+        : plan.monthly_price_cents
+        ? Number(plan.monthly_price_cents) / 100
+        : 0,
+      includedSeconds: Number(plan.included_seconds) || 0,
+      description: String(plan.description || ''),
+    }));
+
+    return {
+      success: true,
+      data: normalized,
+    };
   }
 
   async createCheckoutSession(planId: string): Promise<ApiResponse<{ url: string }>> {
-    return this.request<{ url: string }>('/api/web/checkout', {
+    const result = await this.request<{ session_url: string; session_id: string }>('/api/subscribe', {
       method: 'POST',
-      body: JSON.stringify({ pack_type: planId }),
+      body: JSON.stringify({ plan_id: planId }),
     });
+
+    if (!result.success || !result.data) {
+      return {
+        success: false,
+        error: result.error || 'Unable to start subscription checkout',
+      };
+    }
+
+    return {
+      success: true,
+      data: { url: result.data.session_url },
+    };
   }
 
   // Stats (public)

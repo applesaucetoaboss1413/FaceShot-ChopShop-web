@@ -18,7 +18,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
+    console.log('[AuthContext] refreshUser start');
     if (!api.getToken()) {
+      console.log('[AuthContext] No token present, treating as logged out');
       setUser(null);
       setIsLoading(false);
       return;
@@ -26,8 +28,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const result = await api.getCurrentUser();
     if (result.success && result.data) {
+      console.log('[AuthContext] Current user loaded', { id: result.data.id, email: result.data.email });
       setUser(result.data);
     } else {
+      console.warn('[AuthContext] Failed to load current user, clearing session', { error: result.error });
       setUser(null);
       api.setToken(null);
     }
@@ -39,24 +43,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const login = async (email: string, password: string) => {
+    console.log('[AuthContext] login called', { email });
     const result = await api.login({ email, password });
     if (result.success && result.data) {
+      console.log('[AuthContext] login success, updating user state', {
+        id: result.data.user.id,
+        email: result.data.user.email,
+      });
       setUser(result.data.user);
       return { success: true };
     }
+    console.warn('[AuthContext] login failed', { email, error: result.error });
     return { success: false, error: result.error };
   };
 
   const signup = async (email: string, password: string, name?: string) => {
+    console.log('[AuthContext] signup called', { email });
     const result = await api.signup({ email, password, name });
     if (result.success && result.data) {
+      console.log('[AuthContext] signup success, updating user state', {
+        id: result.data.user.id,
+        email: result.data.user.email,
+      });
       setUser(result.data.user);
       return { success: true };
     }
+    console.warn('[AuthContext] signup failed', { email, error: result.error });
     return { success: false, error: result.error };
   };
 
   const logout = () => {
+    console.log('[AuthContext] logout called');
     api.logout();
     setUser(null);
   };

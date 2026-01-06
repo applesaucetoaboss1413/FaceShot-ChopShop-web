@@ -19,17 +19,20 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[LoginPage] Submit clicked', { email });
     setIsLoading(true);
 
     const result = await login(email, password);
     
     if (result.success) {
+      console.log('[LoginPage] Login successful, navigating to dashboard');
       toast({
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       });
       navigate('/dashboard');
     } else {
+      console.warn('[LoginPage] Login failed', { email, error: result.error });
       toast({
         title: 'Login failed',
         description: result.error || 'Invalid email or password.',
@@ -134,12 +137,12 @@ export default function LoginPage() {
             </div>
 
             <div className="flex items-center justify-end">
-              <Link 
-                to="/forgot-password" 
+              <a
+                href="mailto:support@faceshot.ai?subject=Password%20reset%20request"
                 className="text-sm text-primary hover:underline"
               >
                 Forgot password?
-              </Link>
+              </a>
             </div>
 
             <Button

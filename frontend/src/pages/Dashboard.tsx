@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Upload, 
@@ -64,22 +64,40 @@ export default function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [credits, setCredits] = useState(user?.credits || 0);
 
-  // Fetch user credits and history on mount
+  const selectedTransformation = transformations.find((t) => t.id === selectedType);
+  const requiredCredits = selectedTransformation?.credits || 1;
+  const hasInsufficientCredits = credits < requiredCredits;
+
   useEffect(() => {
-    api.getCredits().then((result) => {
-      if (result.success && result.data) {
-        setCredits(result.data.balance);
+    let isMounted = true;
+
+    const loadDashboardData = async () => {
+      try {
+        const creditsResult = await api.getCredits();
+        if (isMounted && creditsResult.success && creditsResult.data) {
+          setCredits(creditsResult.data.balance);
+        }
+
+        const historyResult = await api.getJobHistory();
+        if (isMounted && historyResult.success && historyResult.data) {
+          const items = (historyResult.data as any).items || historyResult.data;
+          setJobs(items);
+        }
+      } catch {
+        toast({
+          title: 'Unable to load dashboard data',
+          description: 'Please refresh the page and try again.',
+          variant: 'destructive',
+        });
       }
-    });
-    
-    api.getJobHistory().then((result) => {
-      if (result.success && result.data) {
-        // Backend returns { items: [...] }
-        const items = (result.data as any).items || result.data;
-        setJobs(items);
-      }
-    });
-  }, []);
+    };
+
+    loadDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [toast]);
 
   const handleFileUpload = useCallback((
     e: React.ChangeEvent<HTMLInputElement>,
@@ -123,7 +141,6 @@ export default function Dashboard() {
       return;
     }
 
-    const requiredCredits = transformations.find(t => t.id === selectedType)?.credits || 1;
     if (credits < requiredCredits) {
       toast({
         title: 'Insufficient credits',
@@ -206,6 +223,7 @@ export default function Dashboard() {
           <button
             onClick={() => setImage(null)}
             className="absolute top-2 right-2 p-2 rounded-lg bg-destructive/80 text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label={`Remove ${label}`}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -260,6 +278,7 @@ export default function Dashboard() {
             <button
               onClick={handleLogout}
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              aria-label="Logout"
             >
               <LogOut className="w-5 h-5" />
             </button>
@@ -320,7 +339,8 @@ export default function Dashboard() {
                   size="lg"
                   className="w-full mt-6"
                   onClick={handleProcess}
-                  disabled={isProcessing || !sourceImage}
+                  disabled={isProcessing || !sourceImage || hasInsufficientCredits}
+                  aria-busy={isProcessing}
                 >
                   {isProcessing ? (
                     <>
@@ -330,10 +350,15 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <Zap className="w-5 h-5 mr-2" />
-                      Generate ({transformations.find(t => t.id === selectedType)?.credits} credits)
+                      Generate ({requiredCredits} credits)
                     </>
                   )}
                 </Button>
+                {hasInsufficientCredits && (
+                  <p className="mt-2 text-sm text-destructive">
+                    You need {requiredCredits} credits to run this transformation.
+                  </p>
+                )}
               </div>
 
               {/* Current Job Result */}
