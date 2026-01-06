@@ -7,7 +7,8 @@
 
 ## Workflow Steps
 
-### [ ] Step: Investigation and Planning
+### [x] Step: Investigation and Planning
+<!-- chat-id: f046ffdb-9082-4005-a718-7ecc19e1daa3 -->
 
 Analyze the bug report and design a solution.
 
@@ -25,6 +26,7 @@ Save findings to `{@artifacts_path}/investigation.md` with:
 - Proposed solution
 
 ### [ ] Step: Implementation
+<!-- chat-id: 851ea516-f97f-4976-a86d-c74f59a721a8 -->
 Read `{@artifacts_path}/investigation.md`
 Implement the bug fix.
 

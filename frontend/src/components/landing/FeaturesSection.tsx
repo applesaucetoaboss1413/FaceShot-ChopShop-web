@@ -3,36 +3,42 @@ import { Repeat, User, Video, Wand2, Zap, Shield } from 'lucide-react';
 
 const features = [
   {
+    id: 'face-swap',
     icon: Repeat,
     title: 'Face Swap',
     description: 'Seamlessly swap faces between photos with AI precision. Perfect for creative projects and fun experiments.',
     gradient: 'from-cyan-500 to-blue-500',
   },
   {
+    id: 'ai-avatars',
     icon: User,
     title: 'AI Avatars',
     description: 'Generate stunning, unique avatars from your photos. Multiple styles from professional to artistic.',
     gradient: 'from-purple-500 to-pink-500',
   },
   {
+    id: 'image-to-video',
     icon: Video,
     title: 'Image to Video',
     description: 'Bring your static images to life with AI-powered animation. Create engaging video content instantly.',
     gradient: 'from-orange-500 to-red-500',
   },
   {
+    id: 'one-click-magic',
     icon: Wand2,
     title: 'One-Click Magic',
     description: 'No technical skills needed. Upload, select your transformation, and let AI do the heavy lifting.',
     gradient: 'from-green-500 to-emerald-500',
   },
   {
+    id: 'lightning-fast',
     icon: Zap,
     title: 'Lightning Fast',
     description: 'Get results in seconds, not minutes. Our optimized pipeline delivers professional quality at speed.',
     gradient: 'from-yellow-500 to-orange-500',
   },
   {
+    id: 'secure-private',
     icon: Shield,
     title: 'Secure & Private',
     description: 'Your images are encrypted and automatically deleted after processing. We never store or share your data.',
@@ -108,8 +114,9 @@ export function FeaturesSection() {
           {features.map((feature, index) => (
             <motion.div
               key={feature.title}
+              id={feature.id}
               variants={itemVariants}
-              className="group glass-card p-6 hover:border-primary/30 transition-all duration-300"
+              className="group glass-card p-6 hover:border-primary/30 transition-all duration-300 scroll-mt-20"
             >
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
                 <feature.icon className="w-6 h-6 text-white" />
