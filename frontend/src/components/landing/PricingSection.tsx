@@ -62,8 +62,15 @@ export function PricingSection() {
   }, [toast]);
 
   const handleCheckout = async (plan: PricingPlan) => {
+    const codeKey = plan.code.toLowerCase();
+
     if (!isAuthenticated) {
-      navigate('/signup');
+      const planParam =
+        codeKey === 'agency'
+          ? 'enterprise'
+          : codeKey;
+
+      navigate(`/signup?plan=${encodeURIComponent(planParam)}`);
       return;
     }
 

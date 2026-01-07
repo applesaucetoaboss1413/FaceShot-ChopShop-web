@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import Index from "@/pages/Index";
+import { Navbar } from "@/components/layout/Navbar";
+import { PricingSection } from "@/components/landing/PricingSection";
+import SignupPage from "@/pages/Signup";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 
@@ -14,6 +19,8 @@ vi.mock("@/lib/api", async (original) => {
       getCurrentUser: vi.fn(),
       getToken: vi.fn(),
       setToken: vi.fn(),
+      getPricingPlans: vi.fn(),
+      createCheckoutSession: vi.fn(),
     },
   };
 });
@@ -24,6 +31,8 @@ const mockedApi = api as unknown as {
   getCurrentUser: ReturnType<typeof vi.fn>;
   getToken: ReturnType<typeof vi.fn>;
   setToken: ReturnType<typeof vi.fn>;
+  getPricingPlans: ReturnType<typeof vi.fn>;
+  createCheckoutSession: ReturnType<typeof vi.fn>;
 };
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -37,6 +46,8 @@ describe("Auth flow", () => {
     mockedApi.getCurrentUser.mockReset();
     mockedApi.getToken.mockReset();
     mockedApi.setToken.mockReset();
+    mockedApi.getPricingPlans.mockReset();
+    mockedApi.createCheckoutSession.mockReset();
   });
 
   it("handles successful login", async () => {
@@ -139,3 +150,85 @@ describe("Auth flow", () => {
   });
 });
 
+describe("Pricing navigation", () => {
+  beforeEach(() => {
+    mockedApi.getPricingPlans.mockReset();
+    mockedApi.createCheckoutSession.mockReset();
+  });
+
+  it("routes unauthenticated users to signup with plan parameter", async () => {
+    mockedApi.getPricingPlans.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: "starter-id",
+          code: "starter",
+          name: "Starter",
+          monthlyPriceUsd: 9,
+          includedSeconds: 300,
+          description: "Starter plan",
+        },
+      ],
+    });
+
+    const initialEntries = ["/pricing"];
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={initialEntries}>
+          <Routes>
+            <Route path="/pricing" element={<PricingSection />} />
+            <Route path="/signup" element={<SignupPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    );
+
+    const button = await screen.findByRole("button", { name: /get started/i });
+    fireEvent.click(button);
+
+    expect(screen.getByText(/Selected: Starter Plan/i)).toBeInTheDocument();
+  });
+});
+
+describe("Landing navigation", () => {
+  beforeEach(() => {
+    (window as any).scrollTo = vi.fn();
+  });
+
+  it("renders header nav links with correct hashes", () => {
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/"]}>
+          <Navbar />
+        </MemoryRouter>
+      </AuthProvider>
+    );
+
+    expect(screen.getByText("Face Swap").closest("a")).toHaveAttribute("href", "/#face-swap");
+    expect(screen.getByText("AI Avatars").closest("a")).toHaveAttribute("href", "/#ai-avatars");
+    expect(screen.getByText("Image to Video").closest("a")).toHaveAttribute("href", "/#image-to-video");
+    expect(screen.getByText("One-Click Magic").closest("a")).toHaveAttribute("href", "/#one-click-magic");
+    expect(screen.getByText("Secure & Private").closest("a")).toHaveAttribute("href", "/#secure-private");
+    expect(screen.getByText("Pricing").closest("a")).toHaveAttribute("href", "/#pricing");
+  });
+
+  it("scrolls to section when loaded with hash", () => {
+    const scrollIntoView = vi.fn();
+
+    const target = document.createElement("div");
+    target.id = "face-swap";
+    (target as any).scrollIntoView = scrollIntoView;
+    document.body.appendChild(target);
+
+    render(
+      <AuthProvider>
+        <MemoryRouter initialEntries={["/#face-swap"]}>
+          <Index />
+        </MemoryRouter>
+      </AuthProvider>
+    );
+
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+});

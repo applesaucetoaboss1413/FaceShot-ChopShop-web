@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 
 const navLinks = [
-  { href: '/#face-swap', label: 'Face Swap' },
-  { href: '/#ai-avatars', label: 'AI Avatars' },
-  { href: '/#image-to-video', label: 'Image to Video' },
-  { href: '/#one-click-magic', label: 'One-Click Magic' },
-  { href: '/#secure-private', label: 'Secure & Private' },
-  { href: '/#pricing', label: 'Pricing' },
+  { path: '/', hash: '#face-swap', label: 'Face Swap' },
+  { path: '/', hash: '#ai-avatars', label: 'AI Avatars' },
+  { path: '/', hash: '#image-to-video', label: 'Image to Video' },
+  { path: '/', hash: '#one-click-magic', label: 'One-Click Magic' },
+  { path: '/', hash: '#secure-private', label: 'Secure & Private' },
+  { path: '/', hash: '#pricing', label: 'Pricing' },
 ];
 
 export function Navbar() {
@@ -37,13 +37,13 @@ export function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
+              <Link
+                key={`${link.path}${link.hash}`}
+                to={{ pathname: link.path, hash: link.hash }}
                 className="text-muted-foreground hover:text-foreground transition-colors duration-200 text-sm font-medium"
               >
                 {link.label}
-              </a>
+              </Link>
             ))}
           </div>
 
@@ -90,6 +90,7 @@ export function Navbar() {
       </div>
 
       {/* Mobile Menu */}
+      {/* Mobile Menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -100,14 +101,14 @@ export function Navbar() {
           >
             <div className="container mx-auto px-4 py-4 space-y-3">
               {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
+                <Link
+                  key={`${link.path}${link.hash}`}
+                  to={{ pathname: link.path, hash: link.hash }}
                   className="block py-2 text-muted-foreground hover:text-foreground transition-colors"
                   onClick={() => setIsOpen(false)}
                 >
                   {link.label}
-                </a>
+                </Link>
               ))}
               <div className="pt-3 border-t border-border space-y-2">
                 {isAuthenticated ? (
