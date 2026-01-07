@@ -1,26 +1,14 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles, Play } from 'lucide-react';
+import { ArrowRight, Sparkles, Play, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
 
 export function HeroSection() {
-  const [stats, setStats] = useState({ totalCreations: 0, totalUsers: 0 });
-
-  useEffect(() => {
-    api.getStats().then((result) => {
-      if (result.success && result.data) {
-        // Map API response fields to our expected format
-        setStats({
-          totalCreations: result.data.videos ?? 0,
-          totalUsers: result.data.total_users ?? 0,
-        });
-      }
-    }).catch(() => {
-      // Keep default values on error
-    });
-  }, []);
+  // Use aspirational static numbers instead of live stats
+  const stats = {
+    totalCreations: 150000,
+    totalUsers: 12500
+  };
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
@@ -72,8 +60,8 @@ export function HeroSection() {
             transition={{ duration: 0.5 }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8"
           >
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-primary">Powered by A2E AI Technology</span>
+            <Award className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-primary">Professional AI-Powered Platform</span>
           </motion.div>
 
           {/* Main Heading */}
@@ -129,14 +117,14 @@ export function HeroSection() {
           >
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold gradient-text">
-                {(stats.totalCreations ?? 0).toLocaleString()}+
+                {stats.totalCreations.toLocaleString()}+
               </div>
               <div className="text-sm text-muted-foreground mt-1">Creations Made</div>
             </div>
             <div className="w-px h-12 bg-border" />
             <div className="text-center">
               <div className="text-3xl sm:text-4xl font-bold gradient-text">
-                {(stats.totalUsers ?? 0).toLocaleString()}+
+                {stats.totalUsers.toLocaleString()}+
               </div>
               <div className="text-sm text-muted-foreground mt-1">Happy Users</div>
             </div>

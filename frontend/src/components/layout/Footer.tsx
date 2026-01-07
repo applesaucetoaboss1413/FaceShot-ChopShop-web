@@ -17,7 +17,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-muted-foreground text-sm max-w-xs">
-              Transform your images with cutting-edge AI. Face swaps, avatars, and video generation powered by A2E technology.
+              Transform your images with cutting-edge AI. Professional face swaps, avatars, and video generation for creators and businesses.
             </p>
           </div>
 
