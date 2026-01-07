@@ -251,9 +251,6 @@ const catalogConfig = require('./shared/config/catalog')
 const A2EService = require('./services/a2e')
 const PricingEngine = require('./services/pricing')
 
-// Enhanced API Tool Mapping System
-const enhancedApiRoutes = require('./routes/enhanced-api')(db, authenticateToken, isAdmin)
-
 const pollingJobs = new Map()
 
 function startStatusPolling(jobId, type, a2eTaskId) {
@@ -308,10 +305,6 @@ function startStatusPolling(jobId, type, a2eTaskId) {
 }
 
 app.use(limiter)
-
-// Register Enhanced API Tool Mapping routes
-app.use(enhancedApiRoutes)
-logger.info('Enhanced API Tool Mapping routes registered')
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }))
 app.get('/ready', (req, res) => res.status(200).json({ status: 'ready' }))
@@ -797,6 +790,11 @@ const isAdmin = (req, res, next) => {
 
     next()
 }
+
+// Register Enhanced API Tool Mapping routes
+const enhancedApiRoutes = require('./routes/enhanced-api')(db, authenticateToken, isAdmin)
+app.use(enhancedApiRoutes)
+logger.info('Enhanced API Tool Mapping routes registered')
 
 app.get('/api/admin/stats', authenticateToken, isAdmin, (req, res) => {
     try {
