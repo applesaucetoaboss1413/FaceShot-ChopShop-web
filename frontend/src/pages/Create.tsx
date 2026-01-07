@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  ShoppingCart, 
-  Loader2, 
+import {
+  ShoppingCart,
+  Loader2,
   Check,
   Plus,
   Minus,
   AlertCircle,
   Zap,
-  LogOut
+  LogOut,
+  Award,
+  Clock,
+  Palette
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, SKU, PricingQuote } from '@/lib/api';
+import { api, SKU, PricingQuote, Flag } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate } from 'react-router-dom';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const vectorCategories = [
   { id: 'v1', name: 'Images', code: 'V1' },
@@ -37,6 +41,13 @@ export default function CreatePage() {
   const [quote, setQuote] = useState<PricingQuote | null>(null);
   const [isLoadingSKUs, setIsLoadingSKUs] = useState(true);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [flags, setFlags] = useState<Flag[]>([]);
+  const [selectedFlags, setSelectedFlags] = useState<string[]>([]);
+  const [isLoadingFlags, setIsLoadingFlags] = useState(true);
+
+  useEffect(() => {
+    loadFlags();
+  }, []);
 
   useEffect(() => {
     loadSKUs(selectedCategory);
@@ -44,9 +55,26 @@ export default function CreatePage() {
 
   useEffect(() => {
     if (selectedSKU) {
-      loadQuote(selectedSKU.code, quantity);
+      loadQuote(selectedSKU.code, quantity, selectedFlags);
     }
-  }, [selectedSKU, quantity]);
+  }, [selectedSKU, quantity, selectedFlags]);
+
+  const loadFlags = async () => {
+    setIsLoadingFlags(true);
+    const result = await api.getFlags();
+    
+    if (result.success && result.data) {
+      setFlags(result.data);
+    } else {
+      toast({
+        title: 'Unable to load pricing options',
+        description: result.error || 'Please try again later.',
+        variant: 'destructive',
+      });
+    }
+    
+    setIsLoadingFlags(false);
+  };
 
   const loadSKUs = async (vectorId: string) => {
     setIsLoadingSKUs(true);
@@ -68,11 +96,11 @@ export default function CreatePage() {
     setIsLoadingSKUs(false);
   };
 
-  const loadQuote = async (skuCode: string, qty: number) => {
+  const loadQuote = async (skuCode: string, qty: number, appliedFlags: string[]) => {
     setIsLoadingQuote(true);
     setQuote(null);
     
-    const result = await api.getPricingQuote(skuCode, qty, []);
+    const result = await api.getPricingQuote(skuCode, qty, appliedFlags);
     
     if (result.success && result.data) {
       setQuote(result.data);
@@ -90,6 +118,23 @@ export default function CreatePage() {
   const handleQuantityChange = (delta: number) => {
     const newQty = Math.max(1, Math.min(100, quantity + delta));
     setQuantity(newQty);
+  };
+
+  const toggleFlag = (flagCode: string) => {
+    setSelectedFlags(prev => {
+      if (prev.includes(flagCode)) {
+        return prev.filter(f => f !== flagCode);
+      } else {
+        return [...prev, flagCode];
+      }
+    });
+  };
+
+  const getFlagIcon = (flagCode: string) => {
+    if (flagCode === 'R') return <Clock className="w-4 h-4" />;
+    if (flagCode === 'C') return <Palette className="w-4 h-4" />;
+    if (flagCode.startsWith('L_')) return <Award className="w-4 h-4" />;
+    return <Check className="w-4 h-4" />;
   };
 
   const handleLogout = () => {
@@ -271,6 +316,79 @@ export default function CreatePage() {
                     )}
                   </motion.div>
                 )}
+
+                {/* Customization Options */}
+                {selectedSKU && !isLoadingFlags && flags.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="glass-card p-6"
+                  >
+                    <h2 className="text-lg font-semibold mb-4">Customization Options</h2>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Enhance your order with these optional features. Pricing updates automatically.
+                    </p>
+                    
+                    <div className="space-y-3">
+                      {flags
+                        .filter(flag => {
+                          // Filter out default flags and batch flag (auto-applied)
+                          if (flag.code === 'B') return false;
+                          if (selectedSKU.defaultFlags.includes(flag.code)) return false;
+                          return true;
+                        })
+                        .map((flag) => (
+                          <div
+                            key={flag.id}
+                            className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                              selectedFlags.includes(flag.code)
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:border-primary/30'
+                            }`}
+                            onClick={() => toggleFlag(flag.code)}
+                          >
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={selectedFlags.includes(flag.code)}
+                                onCheckedChange={() => toggleFlag(flag.code)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  {getFlagIcon(flag.code)}
+                                  <span className="font-semibold">{flag.label}</span>
+                                  {flag.priceMultiplier !== 1.0 && (
+                                    <span className="text-xs text-primary font-medium">
+                                      ×{flag.priceMultiplier}
+                                    </span>
+                                  )}
+                                  {flag.priceAddFlatCents > 0 && (
+                                    <span className="text-xs text-primary font-medium">
+                                      +${flag.priceAddFlatUsd}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  {flag.description}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+
+                    {selectedSKU.defaultFlags.length > 0 && (
+                      <div className="mt-4 p-3 rounded-lg bg-muted/50">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Included:</strong> {selectedSKU.defaultFlags.map(code => {
+                            const flag = flags.find(f => f.code === code);
+                            return flag?.label || code;
+                          }).join(', ')}
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
               </div>
 
               {/* Right Panel - Quote Summary */}
@@ -293,6 +411,19 @@ export default function CreatePage() {
                         <div className="text-sm text-muted-foreground">
                           Quantity: {quote.quantity}
                         </div>
+                        {quote.appliedFlags.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {quote.appliedFlags.map(flagCode => {
+                              const flag = flags.find(f => f.code === flagCode);
+                              return flag ? (
+                                <span key={flagCode} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs">
+                                  {getFlagIcon(flagCode)}
+                                  {flag.label}
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-2 pt-4 border-t border-border">

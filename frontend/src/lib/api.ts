@@ -95,6 +95,16 @@ interface PricingQuote {
   remainingPlanSeconds: number;
 }
 
+interface Flag {
+  id: string;
+  code: string;
+  label: string;
+  priceMultiplier: number;
+  priceAddFlatUsd: string;
+  priceAddFlatCents: number;
+  description: string;
+}
+
 interface AccountPlan {
   hasPlan: boolean;
   plan?: {
@@ -345,6 +355,33 @@ class ApiClient {
     };
   }
 
+  // Flags
+  async getFlags(): Promise<ApiResponse<Flag[]>> {
+    const result = await this.request<{ flags: any[] }>('/api/flags');
+    
+    if (!result.success || !result.data) {
+      return {
+        success: false,
+        error: result.error || 'Failed to load flags',
+      };
+    }
+
+    const flags: Flag[] = (result.data.flags || []).map((flag: any) => ({
+      id: String(flag.id),
+      code: String(flag.code),
+      label: String(flag.label),
+      priceMultiplier: Number(flag.price_multiplier) || 1.0,
+      priceAddFlatUsd: String(flag.price_add_flat_usd || '0.00'),
+      priceAddFlatCents: Number(flag.price_add_flat_cents) || 0,
+      description: String(flag.description || ''),
+    }));
+
+    return {
+      success: true,
+      data: flags,
+    };
+  }
+
   // Pricing Quote
   async getPricingQuote(
     skuCode: string,
@@ -447,4 +484,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient(API_BASE_URL);
-export type { User, Job, ProcessJobPayload, LoginPayload, SignupPayload, PricingPlan, SKU, PricingQuote, AccountPlan, ApiResponse };
+export type { User, Job, ProcessJobPayload, LoginPayload, SignupPayload, PricingPlan, SKU, PricingQuote, Flag, AccountPlan, ApiResponse };
