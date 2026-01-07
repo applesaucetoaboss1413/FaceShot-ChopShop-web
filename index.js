@@ -938,6 +938,24 @@ app.put('/api/admin/flags/:id', authenticateToken, isAdmin, (req, res) => {
     }
 })
 
+app.get('/api/flags', (req, res) => {
+    try {
+        const flags = db.prepare('SELECT * FROM flags WHERE active = 1 ORDER BY code ASC').all()
+        res.json({ flags: flags.map(f => ({
+            id: f.id,
+            code: f.code,
+            label: f.label,
+            price_multiplier: f.price_multiplier,
+            price_add_flat_usd: (f.price_add_flat_cents / 100).toFixed(2),
+            price_add_flat_cents: f.price_add_flat_cents,
+            description: f.description
+        })) })
+    } catch (e) {
+        logger.error({ msg: 'flags_fetch_error', error: String(e) })
+        res.status(500).json({ error: 'fetch_failed' })
+    }
+})
+
 app.get('/api/admin/flags', authenticateToken, isAdmin, (req, res) => {
     try {
         const flags = db.prepare('SELECT * FROM flags ORDER BY code ASC').all()
