@@ -353,13 +353,25 @@ class SKUConfigManager {
             `);
 
             customerOptions.forEach((option, index) => {
+                // Ensure default_value is a valid SQLite type (string, number, or null)
+                let defaultValue = option.default_value;
+                if (defaultValue !== null && defaultValue !== undefined) {
+                    if (typeof defaultValue === 'object') {
+                        defaultValue = JSON.stringify(defaultValue);
+                    } else if (typeof defaultValue !== 'string' && typeof defaultValue !== 'number') {
+                        defaultValue = String(defaultValue);
+                    }
+                } else {
+                    defaultValue = null;
+                }
+
                 optionStmt.run(
                     config.id,
                     option.option_key,
                     option.option_label,
                     option.option_type,
                     option.option_values ? JSON.stringify(option.option_values) : null,
-                    option.default_value || null,
+                    defaultValue,
                     option.required ? 1 : 0,
                     option.validation_rules ? JSON.stringify(option.validation_rules) : null,
                     option.help_text || null,
