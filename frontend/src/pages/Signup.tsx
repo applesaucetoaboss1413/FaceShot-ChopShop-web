@@ -28,7 +28,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-  const { signup } = useAuth();
+  const { signup, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -38,6 +38,12 @@ export default function SignupPage() {
       setSelectedPlan(plan);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +68,6 @@ export default function SignupPage() {
         title: 'Account created!',
         description: 'Welcome to FaceShot-ChopShop.',
       });
-      navigate('/dashboard');
     } else {
       console.warn('[SignupPage] Signup failed', { email, error: result.error });
       toast({

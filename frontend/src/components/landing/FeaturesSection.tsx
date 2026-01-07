@@ -71,14 +71,7 @@ export function FeaturesSection() {
   const navigate = useNavigate();
 
   const handleNavigate = (id: string) => {
-    // Navigate to the hash route
-    navigate(`/#${id}`);
-    
-    // Also perform a smooth scroll if we're already on the landing page
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    navigate(`/dashboard?feature=${id}`);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, id: string) => {

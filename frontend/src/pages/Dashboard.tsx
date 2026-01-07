@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Job } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 type TransformationType = 'face-swap' | 'avatar' | 'image-to-video';
 
@@ -55,6 +55,7 @@ export default function Dashboard() {
   const { user, logout, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   
   const [selectedType, setSelectedType] = useState<TransformationType>('face-swap');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -112,6 +113,21 @@ export default function Dashboard() {
       isMounted = false;
     };
   }, [user, toast]);
+
+  useEffect(() => {
+    const feature = searchParams.get('feature');
+    if (!feature) return;
+
+    if (feature === 'face-swap') {
+      setSelectedType('face-swap');
+    } else if (feature === 'ai-avatars') {
+      setSelectedType('avatar');
+    } else if (feature === 'image-to-video') {
+      setSelectedType('image-to-video');
+    } else {
+      setSelectedType('face-swap');
+    }
+  }, [searchParams]);
 
   if (authLoading || (isLoading && !user)) {
     return (
