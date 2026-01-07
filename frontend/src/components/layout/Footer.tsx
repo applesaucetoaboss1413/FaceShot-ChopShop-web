@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Zap, Github, Twitter, Mail } from 'lucide-react';
+import { Zap, Github, Twitter, Mail, Send } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -66,24 +66,33 @@ export function Footer() {
             © {new Date().getFullYear()} FaceShot-ChopShop. All rights reserved.
           </p>
           <div className="flex items-center gap-4 mt-4 md:mt-0">
-            <a 
-              href="https://twitter.com" 
-              target="_blank" 
+            <a
+              href="https://t.me/FaceSwapVideoAi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title="Join us on Telegram"
+            >
+              <Send className="w-5 h-5" />
+            </a>
+            <a
+              href="https://twitter.com"
+              target="_blank"
               rel="noopener noreferrer"
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             >
               <Twitter className="w-5 h-5" />
             </a>
-            <a 
-              href="https://github.com" 
-              target="_blank" 
+            <a
+              href="https://github.com"
+              target="_blank"
               rel="noopener noreferrer"
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             >
               <Github className="w-5 h-5" />
             </a>
-            <a 
-              href="mailto:support@faceshot.ai" 
+            <a
+              href="mailto:support@faceshot.ai"
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             >
               <Mail className="w-5 h-5" />
