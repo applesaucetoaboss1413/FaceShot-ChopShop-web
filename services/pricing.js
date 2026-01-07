@@ -43,6 +43,13 @@ class PricingEngine {
       }
     }
 
+    // Apply batch quantity discounts (B flag logic)
+    if (quantity >= 50) {
+      totalMultiplier *= 0.75;
+    } else if (quantity >= 10) {
+      totalMultiplier *= 0.85;
+    }
+
     price = Math.round(price * totalMultiplier) + totalFlatAdd;
 
     let secondsFromPlan = 0;
