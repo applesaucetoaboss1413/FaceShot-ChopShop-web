@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, Job } from '@/lib/api';
+import { api, Job, AccountPlan } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [credits, setCredits] = useState(0);
+  const [accountPlan, setAccountPlan] = useState<AccountPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Sync credits when user changes
@@ -88,6 +89,11 @@ export default function Dashboard() {
         const creditsResult = await api.getCredits();
         if (isMounted && creditsResult.success && creditsResult.data) {
           setCredits(creditsResult.data.balance);
+        }
+
+        const planResult = await api.getAccountPlan();
+        if (isMounted && planResult.success && planResult.data) {
+          setAccountPlan(planResult.data);
         }
 
         const historyResult = await api.getJobHistory();
@@ -487,6 +493,47 @@ export default function Dashboard() {
                 )}
               </div>
 
+              {/* Subscription Plan */}
+              {accountPlan?.hasPlan && accountPlan.plan && accountPlan.usage && (
+                <div className="glass-card p-6">
+                  <h2 className="text-lg font-semibold mb-4">Your Plan</h2>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-primary">{accountPlan.plan.name}</span>
+                        <span className="text-sm text-muted-foreground">${accountPlan.plan.monthlyPriceUsd}/mo</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{accountPlan.plan.description}</p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Usage This Month</span>
+                        <span className="font-medium">{accountPlan.usage.usagePercent.toFixed(0)}%</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all duration-300"
+                          style={{ width: `${Math.min(100, accountPlan.usage.usagePercent)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{Math.floor(accountPlan.usage.secondsUsed / 60)} min used</span>
+                        <span>{Math.floor(accountPlan.usage.remainingSeconds / 60)} min remaining</span>
+                      </div>
+                    </div>
+
+                    {accountPlan.usage.remainingSeconds < 300 && (
+                      <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                        <p className="text-xs text-orange-400">
+                          Running low on minutes. Overage charges: ${accountPlan.plan.overageRatePerSecondUsd}/sec
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Quick Stats */}
               <div className="glass-card p-6">
                 <h2 className="text-lg font-semibold mb-4">Your Stats</h2>
@@ -499,6 +546,13 @@ export default function Dashboard() {
                     <span className="text-muted-foreground text-sm">Available Credits</span>
                     <span className="font-semibold text-primary">{credits}</span>
                   </div>
+                  {!accountPlan?.hasPlan && (
+                    <Link to="/pricing">
+                      <Button variant="outline" size="sm" className="w-full mt-2">
+                        View Plans
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
