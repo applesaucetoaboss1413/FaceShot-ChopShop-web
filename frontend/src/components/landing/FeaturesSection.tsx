@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Repeat, User, Video, Wand2, Zap, Shield } from 'lucide-react';
-
+import { useNavigate } from 'react-router-dom';
 const features = [
   {
     id: 'face-swap',
@@ -68,6 +68,26 @@ const itemVariants = {
 };
 
 export function FeaturesSection() {
+  const navigate = useNavigate();
+
+  const handleNavigate = (id: string) => {
+    // Navigate to the hash route
+    navigate(`/#${id}`);
+    
+    // Also perform a smooth scroll if we're already on the landing page
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, id: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleNavigate(id);
+    }
+  };
+
   return (
     <section id="features" className="py-24 relative">
       <div className="container mx-auto px-4">
@@ -111,12 +131,17 @@ export function FeaturesSection() {
           viewport={{ once: true, margin: '-100px' }}
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
         >
-          {features.map((feature, index) => (
+          {features.map((feature) => (
             <motion.div
               key={feature.title}
               id={feature.id}
               variants={itemVariants}
-              className="group glass-card p-6 hover:border-primary/30 transition-all duration-300 scroll-mt-20"
+              className="group glass-card p-6 hover:border-primary/30 hover:shadow-lg hover:-translate-y-1 cursor-pointer transition-all duration-300 scroll-mt-20"
+              role="button"
+              tabIndex={0}
+              aria-label={`Navigate to ${feature.title} section`}
+              onClick={() => handleNavigate(feature.id)}
+              onKeyDown={(event) => handleKeyDown(event, feature.id)}
             >
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
                 <feature.icon className="w-6 h-6 text-white" />

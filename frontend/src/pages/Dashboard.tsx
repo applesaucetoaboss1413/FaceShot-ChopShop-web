@@ -52,7 +52,7 @@ const transformations = [
 ];
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -62,7 +62,15 @@ export default function Dashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentJob, setCurrentJob] = useState<Job | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [credits, setCredits] = useState(user?.credits || 0);
+  const [credits, setCredits] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Sync credits when user changes
+  useEffect(() => {
+    if (user) {
+      setCredits(user.credits);
+    }
+  }, [user]);
 
   const selectedTransformation = transformations.find((t) => t.id === selectedType);
   const requiredCredits = selectedTransformation?.credits || 1;
@@ -72,7 +80,10 @@ export default function Dashboard() {
     let isMounted = true;
 
     const loadDashboardData = async () => {
+      if (!user) return;
+      
       try {
+        setIsLoading(true);
         const creditsResult = await api.getCredits();
         if (isMounted && creditsResult.success && creditsResult.data) {
           setCredits(creditsResult.data.balance);
@@ -81,14 +92,17 @@ export default function Dashboard() {
         const historyResult = await api.getJobHistory();
         if (isMounted && historyResult.success && historyResult.data) {
           const items = (historyResult.data as any).items || historyResult.data;
-          setJobs(items);
+          setJobs(Array.isArray(items) ? items : []);
         }
-      } catch {
+      } catch (error) {
+        console.error('[Dashboard] Error loading data:', error);
         toast({
           title: 'Unable to load dashboard data',
           description: 'Please refresh the page and try again.',
           variant: 'destructive',
         });
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
 
@@ -97,7 +111,22 @@ export default function Dashboard() {
     return () => {
       isMounted = false;
     };
-  }, [toast]);
+  }, [user, toast]);
+
+  if (authLoading || (isLoading && !user)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground animate-pulse">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // ProtectedRoute should handle this, but being safe
+  }
 
   const handleFileUpload = useCallback((
     e: React.ChangeEvent<HTMLInputElement>,

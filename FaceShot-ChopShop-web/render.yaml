@@ -1,9 +1,9 @@
 services:
   - type: web
+    runtime: node
     name: FaceShot-ChopShop-web
-    env: node
     plan: free
-    buildCommand: "npm run build-all"
+    buildCommand: "npm run build"
     startCommand: "npm start"
     envVars:
       - key: PORT
