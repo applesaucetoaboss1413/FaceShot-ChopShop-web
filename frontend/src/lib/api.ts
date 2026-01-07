@@ -9,8 +9,8 @@ const isDevelopment = import.meta.env.DEV;
 
 // In development, proxy through Vite or use localhost
 // In production, use relative URLs (same origin as Render deployment)
-const API_BASE_URL = isDevelopment 
-  ? 'http://localhost:3000' 
+const API_BASE_URL = isDevelopment
+  ? 'http://localhost:3000'
   : '';
 
 interface ApiResponse<T = unknown> {
@@ -131,6 +131,29 @@ interface AccountPlan {
   };
 }
 
+interface Order {
+  id: number;
+  skuCode: string;
+  skuName: string;
+  skuDescription: string;
+  quantity: number;
+  appliedFlags: string[];
+  customerPriceCents: number;
+  customerPriceUsd: string;
+  internalCostCents: number;
+  marginPercent: number;
+  totalSeconds: number;
+  overageSeconds: number;
+  status: string;
+  createdAt: string;
+}
+
+interface CreateOrderPayload {
+  sku_code: string;
+  quantity: number;
+  flags: string[];
+}
+
 type BackendPlan = {
   id: unknown;
   code: unknown;
@@ -171,7 +194,7 @@ class ApiClient {
     console.log('[ApiClient] Request start', { endpoint, method });
 
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -292,8 +315,8 @@ class ApiClient {
       monthlyPriceUsd: plan.monthly_price_usd
         ? parseFloat(String(plan.monthly_price_usd))
         : plan.monthly_price_cents
-        ? Number(plan.monthly_price_cents) / 100
-        : 0,
+          ? Number(plan.monthly_price_cents) / 100
+          : 0,
       includedSeconds: Number(plan.included_seconds) || 0,
       description: String(plan.description || ''),
     }));
@@ -327,7 +350,7 @@ class ApiClient {
   async getSKUs(vectorId?: string): Promise<ApiResponse<SKU[]>> {
     const params = vectorId ? `?vector_id=${vectorId}` : '';
     const result = await this.request<{ skus: any[] }>(`/api/skus${params}`);
-    
+
     if (!result.success || !result.data) {
       return {
         success: false,
@@ -358,7 +381,7 @@ class ApiClient {
   // Flags
   async getFlags(): Promise<ApiResponse<Flag[]>> {
     const result = await this.request<{ flags: any[] }>('/api/flags');
-    
+
     if (!result.success || !result.data) {
       return {
         success: false,
@@ -437,7 +460,7 @@ class ApiClient {
     }
 
     const data = result.data;
-    
+
     if (!data.has_plan) {
       return {
         success: true,
@@ -477,6 +500,22 @@ class ApiClient {
     };
   }
 
+  // Orders
+  async createOrder(payload: CreateOrderPayload): Promise<ApiResponse<{ order_id: number; quote: PricingQuote; status: string; message: string }>> {
+    return this.request<{ order_id: number; quote: PricingQuote; status: string; message: string }>('/api/orders/create', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getOrders(limit: number = 20, offset: number = 0): Promise<ApiResponse<{ orders: Order[] }>> {
+    return this.request<{ orders: Order[] }>(`/api/orders?limit=${limit}&offset=${offset}`);
+  }
+
+  async getOrder(orderId: number): Promise<ApiResponse<{ order: Order }>> {
+    return this.request<{ order: Order }>(`/api/orders/${orderId}`);
+  }
+
   // Stats (public)
   async getStats(): Promise<ApiResponse<{ videos: number; paying_users: number; total_users: number }>> {
     return this.request<{ videos: number; paying_users: number; total_users: number }>('/stats');
@@ -484,4 +523,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient(API_BASE_URL);
-export type { User, Job, ProcessJobPayload, LoginPayload, SignupPayload, PricingPlan, SKU, PricingQuote, Flag, AccountPlan, ApiResponse };
+export type { User, Job, ProcessJobPayload, LoginPayload, SignupPayload, PricingPlan, SKU, PricingQuote, Flag, AccountPlan, Order, CreateOrderPayload, ApiResponse };

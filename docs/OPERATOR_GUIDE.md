@@ -1,458 +1,618 @@
-# Operator Guide - Pricing System
+# FaceShot ChopShop - Operator Guide
+
+## Table of Contents
+1. [Overview](#overview)
+2. [System Architecture](#system-architecture)
+3. [Pricing Model](#pricing-model)
+4. [Managing SKUs](#managing-skus)
+5. [Managing Plans](#managing-plans)
+6. [Managing Flags](#managing-flags)
+7. [Monitoring & Analytics](#monitoring--analytics)
+8. [Best Practices](#best-practices)
+9. [Troubleshooting](#troubleshooting)
+
+---
 
 ## Overview
 
-This guide explains how to operate and maintain the FaceShot-ChopShop pricing system. The system includes subscription plans, SKUs (Stock Keeping Units), usage tracking, and dynamic pricing with batch discounts.
+FaceShot ChopShop is a reseller platform for A2E.ai services with a sophisticated pricing engine that ensures healthy margins while offering competitive prices to customers.
+
+### Key Components
+- **Plans**: Subscription tiers with included processing seconds
+- **SKUs**: Individual service offerings (images, videos, voice, content)
+- **Flags**: Pricing modifiers (rapid delivery, custom branding, licenses)
+- **Vectors**: Service categories (V1-V7)
+
+---
 
 ## System Architecture
 
-### Core Components
+### Database Schema
 
-1. **Database Tables**
-   - `plans` - Subscription plans with included seconds and overage rates
-   - `vectors` - Service categories (Image, Video, Voice, etc.)
-   - `skus` - Individual services/products
-   - `flags` - Price modifiers (Rush, Custom, Licenses)
-   - `user_plans` - User subscription records
-   - `plan_usage` - Monthly usage tracking
-   - `orders` - Order history with pricing details
-
-2. **PricingEngine Service** (`services/pricing.js`)
-   - Calculates dynamic quotes based on user plan, SKU, quantity, and flags
-   - Enforces minimum margins (40% by default)
-   - Applies batch discounts (15% for 10+, 25% for 50+)
-   - Tracks usage and calculates overages
-
-3. **API Endpoints**
-   - `GET /api/plans` - List active plans
-   - `GET /api/skus` - List SKUs (filterable by vector)
-   - `POST /api/pricing/quote` - Get real-time pricing quote
-   - `POST /api/subscribe` - Create subscription checkout
-   - `GET /api/account/plan` - Get user's plan and usage
-   - Admin endpoints for CRUD operations
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Pricing Constants
-COST_PER_CREDIT=0.0111  # A2E upstream cost per credit
-MIN_MARGIN=0.40          # Minimum margin (40%)
-
-# Stripe
-STRIPE_SECRET_KEY=sk_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-
-# Admin Access
-ADMIN_EMAILS=admin@example.com,operator@example.com
+#### Core Tables
+```
+plans           → Subscription tiers
+vectors         → Service categories (V1-V7)
+skus            → Product offerings
+flags           → Pricing modifiers
+user_plans      → User subscription records
+plan_usage      → Monthly usage tracking
+orders          → Order history with pricing
+jobs            → A2E.ai processing jobs
 ```
 
-### Cost Model
-
-- **Upstream Cost**: $19.99 for 1,800 credits = $0.0111/credit
-- **Internal Conversion**: 1 second of generation ≈ 1 credit
-- **Minimum Margin**: 40% (configurable via `MIN_MARGIN`)
-
-## Managing Plans
-
-### View Current Plans
-
-Plans are defined in the database. To view:
-
-```sql
-SELECT * FROM plans WHERE active = 1;
+### Pricing Flow
+```
+1. User selects SKU + quantity + flags
+2. PricingEngine calculates quote
+3. Margin validation (≥40% minimum)
+4. Order created with locked pricing
+5. Usage deducted from plan if applicable
+6. A2E.ai job initiated
+7. Status polling until completion
 ```
 
-### Create a New Plan
+---
 
-```sql
-INSERT INTO plans (
-  id, code, name, 
-  monthly_price_cents, 
-  included_seconds, 
-  overage_rate_per_second_cents, 
-  description, 
-  active, 
-  created_at
-) VALUES (
-  'plan_custom',
-  'CUSTOM',
-  'Custom Plan',
-  29900,  -- $299.00
-  20000,  -- ~333 minutes
-  8,      -- $0.08/second overage
-  'Custom enterprise plan',
-  1,
-  datetime('now')
-);
+## Pricing Model
+
+### Cost Baseline
+- **A2E.ai Rate**: $19.99 → 1,800 credits
+- **Cost Per Credit (CPC)**: ~$0.0111
+- **1 credit ≈ 1 second** of processing time
+
+### Margin Protection
+- **Minimum Margin**: 40% (configurable via `MIN_MARGIN` env var)
+- **Target Margin**: 70-80% for most SKUs
+- The pricing engine automatically rejects quotes below minimum margin
+
+### Price Calculation Formula
+
+```javascript
+// Base calculation
+base_price = sku.base_price_cents * quantity
+
+// Apply multipliers (R flag, batch discounts)
+price = base_price * totalMultiplier
+
+// Add flat additions (C flag, licenses)
+price = price + totalFlatAdd
+
+// Add overage charges if user has plan
+if (user_has_plan && total_seconds > remaining_seconds) {
+  overage_cost = overage_seconds * plan.overage_rate_per_second_cents
+  final_price = price + overage_cost
+}
+
+// Margin check
+internal_cost = total_credits * COST_PER_CREDIT
+margin = (final_price - internal_cost) / final_price
+if (margin < MIN_MARGIN) → REJECT
 ```
 
-### Update Plan Pricing
-
-Use the admin API:
-
-```bash
-curl -X PUT http://localhost:3000/api/admin/plans/plan_pro \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "monthly_price_usd": "89.99",
-    "included_seconds": 3500,
-    "overage_rate_per_second_usd": "0.12"
-  }'
-```
-
-**Important**: Plan changes only affect new subscriptions. Existing subscriptions maintain their original pricing until renewal.
+---
 
 ## Managing SKUs
 
-### Create a New SKU
+### Creating a New SKU
 
-```sql
-INSERT INTO skus (
-  id, code, name, vector_id,
-  base_credits, base_price_cents,
-  default_flags, description,
-  active, created_at
-) VALUES (
-  'sku_new_product',
-  'NEW-PROD',
-  'New Product Name',
-  'v1',
-  120,       -- 120 credits (~2 minutes)
-  1999,      -- $19.99
-  '["L_STD"]',
-  'Description of new product',
-  1,
-  datetime('now')
-);
-```
+1. **Determine Base Credits**
+   - Estimate processing time in seconds
+   - Example: 30s video = 30 base_credits
 
-### Update SKU Pricing
+2. **Calculate Base Price**
+   ```
+   Internal Cost = base_credits × $0.0111
+   Target Margin = 70%
+   Base Price = Internal Cost / (1 - 0.70)
+   
+   Example: 30 credits
+   Internal Cost = 30 × $0.0111 = $0.333
+   Base Price = $0.333 / 0.30 = $1.11
+   Round to: $1.49 (133% markup, 70% margin)
+   ```
 
-Use the admin API:
+3. **API Call**
+   ```bash
+   # SKUs are seeded on startup via index.js
+   # To add manually, insert into database:
+   
+   INSERT INTO skus (
+     id, code, name, vector_id, base_credits, 
+     base_price_cents, default_flags, description, 
+     active, created_at
+   ) VALUES (
+     'sku_new_id',
+     'X1-CODE',
+     'Service Name',
+     'v1',
+     100,
+     1499,
+     '["L_STD"]',
+     'Service description',
+     1,
+     datetime('now')
+   );
+   ```
 
+### Updating Existing SKUs
+
+**Via Admin Panel:**
+1. Navigate to `/admin` (requires admin email in `ADMIN_EMAILS` env var)
+2. Click "SKUs" tab
+3. Find SKU and click Edit icon
+4. Modify fields:
+   - Name
+   - Base Price (in USD, converts to cents)
+   - Base Credits
+   - Description
+5. Click Save
+
+**Via API:**
 ```bash
-curl -X PUT http://localhost:3000/api/admin/skus/sku_a1_ig \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+curl -X PUT https://your-domain.com/api/admin/skus/sku_id \
+  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "base_price_usd": "5.99",
-    "base_credits": 70
+    "base_price_usd": "14.99",
+    "base_credits": 140,
+    "description": "Updated description"
   }'
 ```
 
-### Pricing Best Practices
+### SKU Pricing Examples
 
-1. **Always Check Margins**
-   - Use the quote endpoint to verify margins before setting prices
-   - Ensure margin > 40% (or your configured MIN_MARGIN)
-   - Formula: `margin = (customer_price - internal_cost) / customer_price`
+| SKU | Service | Credits | Cost | Price | Margin |
+|-----|---------|---------|------|-------|--------|
+| A1-IG | Instagram Image 1080p | 60 | $0.67 | $4.99 | 87% |
+| C2-30 | 30s Video | 180 | $2.00 | $59.00 | 97% |
+| D2-CLONE | Voice Clone | 200 | $2.22 | $39.00 | 94% |
+| F1-STARTER | 10 SEO Articles | 1000 | $11.10 | $49.00 | 77% |
 
-2. **Internal Cost Calculation**
-   ```
-   internal_cost = base_credits * 0.0111 (COST_PER_CREDIT)
-   ```
+---
 
-3. **Recommended Markup**
-   - Standard SKUs: 500-800% markup (70-80% margin)
-   - Premium SKUs: 800-1500% markup (80-90% margin)
-   - Bundles: 400-600% markup (60-75% margin)
+## Managing Plans
+
+### Plan Structure
+
+**Current Plans:**
+```
+Starter: $19.99/mo → 600 seconds, $0.20/sec overage
+Pro:     $79.99/mo → 3,000 seconds, $0.15/sec overage  
+Agency:  $199.00/mo → 10,000 seconds, $0.10/sec overage
+```
+
+### Modifying Plans
+
+**Via Admin Panel:**
+1. Go to `/admin` → Plans tab
+2. Click Edit on desired plan
+3. Adjust:
+   - Monthly Price (USD)
+   - Included Seconds
+   - Overage Rate (USD per second)
+   - Description
+4. Save changes
+
+**Important Notes:**
+- Changes apply to NEW subscriptions only
+- Existing subscribers keep their original pricing until renewal
+- Test pricing changes in staging environment first
+
+### Plan Quota Management
+
+**Monthly Reset:**
+```javascript
+// Automatic reset handled by PricingEngine.getCurrentPeriodUsage()
+// Creates new usage record each calendar month
+```
+
+**Usage Deduction:**
+```javascript
+// Happens after order is placed and A2E job initiated
+pricingEngine.deductUsage(userId, planId, totalSeconds)
+```
+
+---
 
 ## Managing Flags
 
-### Available Flags
+### Flag Types
 
-| Code | Name | Type | Value |
-|------|------|------|-------|
-| R | Rapid (same-day) | Multiplier | 1.4x |
-| C | Custom (brand style) | Flat Fee | +$99.00 |
-| B | Batch | Multiplier | 0.85x (10+), 0.75x (50+) |
-| L_STD | Standard License | None | No change |
-| L_EXT | Extended License | Flat Fee | +$300.00 |
-| L_EXCL | Exclusive License | Flat Fee | +$800.00 |
+#### 1. Rapid (R)
+- **Purpose**: Same-day delivery
+- **Multiplier**: 1.4× (40% premium)
+- **Use Case**: Urgent orders
 
-### Update Flag Pricing
+#### 2. Custom (C)
+- **Purpose**: Brand styling, custom avatars, voice clones
+- **Flat Add**: $99.00
+- **Use Case**: Personalization services
 
-```bash
-curl -X PUT http://localhost:3000/api/admin/flags/flag_r \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "price_multiplier": 1.5,
-    "description": "Same-day rush processing"
-  }'
+#### 3. Batch (B)
+- **Purpose**: Volume discounts
+- **Auto-applied**: 
+  - 10-49 units: 0.85× (15% discount)
+  - 50+ units: 0.75× (25% discount)
+- **Use Case**: Bulk orders
+
+#### 4. Licenses
+- **L_STD**: Standard (default, no change)
+- **L_EXT**: Extended → +$300.00
+- **L_EXCL**: Exclusive → +$800.00
+
+### Updating Flags
+
+**Via Admin Panel:**
+1. Navigate to Flags tab
+2. Edit multiplier or flat addition
+3. Changes apply immediately to new quotes
+
+**Examples:**
+```javascript
+// Increase rapid premium to 50%
+price_multiplier: 1.5
+
+// Reduce extended license cost
+price_add_flat_cents: 25000  // $250
 ```
 
-### Batch Discount Logic
+---
 
-Batch discounts are automatically applied by quantity:
-- **Quantity 10-49**: 15% discount (0.85x multiplier)
-- **Quantity 50+**: 25% discount (0.75x multiplier)
+## Monitoring & Analytics
 
-This is hardcoded in `services/pricing.js` and applied to all orders.
+### Admin Dashboard Statistics
 
-## Monitoring and Reports
+**Access:** `/admin` → Statistics tab
 
-### View Usage Statistics
+**Metrics Available:**
+- Total Revenue (USD)
+- Total Orders
+- Total Users
+- Active Subscriptions
+- Per-SKU Performance:
+  - Order count
+  - Average customer price
+  - Average internal cost
+  - Average margin
 
-```bash
-curl http://localhost:3000/api/admin/stats \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+### Key Performance Indicators (KPIs)
+
+**Healthy Metrics:**
+```
+Overall Margin: >70%
+Order Volume: Growing week-over-week
+Active Subscriptions: >15% of total users
+Average Order Value: $50+
 ```
 
-Returns:
-- SKU order counts and average pricing
-- Total orders, revenue, users
-- Active subscriptions
-
-### Query Order History
-
-```sql
-SELECT 
-  o.id,
-  u.email,
-  o.sku_code,
-  o.quantity,
-  o.customer_price_cents / 100.0 as price_usd,
-  o.internal_cost_cents / 100.0 as cost_usd,
-  o.margin_percent,
-  o.status,
-  o.created_at
-FROM orders o
-JOIN users u ON o.user_id = u.id
-ORDER BY o.created_at DESC
-LIMIT 100;
+**Warning Signs:**
+```
+Margin <50%: Review pricing
+High Overage Rates: Users on wrong plan
+Low Subscription Rate: Plans not competitive
 ```
 
-### Monitor Margins
+### Database Queries for Analysis
 
-Check if any orders have low margins:
-
+**Top Performing SKUs:**
 ```sql
 SELECT 
   sku_code,
+  COUNT(*) as orders,
   AVG(margin_percent) as avg_margin,
-  COUNT(*) as order_count
+  SUM(customer_price_cents) as total_revenue
 FROM orders
-WHERE status = 'completed'
+WHERE status != 'failed'
 GROUP BY sku_code
-HAVING avg_margin < 50
-ORDER BY avg_margin ASC;
+ORDER BY total_revenue DESC;
 ```
 
-## Usage Tracking
-
-### How Usage Works
-
-1. User subscribes to a plan (e.g., Pro: 3,000 seconds/month)
-2. Each order deducts from their monthly quota
-3. If quota exceeded, overage charges apply
-4. Usage resets monthly (on subscription anniversary)
-
-### Manual Usage Adjustment
-
-If you need to adjust a user's usage (e.g., for refunds):
-
+**Subscription Health:**
 ```sql
-UPDATE plan_usage
-SET seconds_used = seconds_used - 300  -- Refund 5 minutes
-WHERE user_id = 123 
-  AND period_start = '2026-01-01T00:00:00.000Z';
+SELECT 
+  p.name,
+  COUNT(up.id) as subscribers,
+  AVG(pu.seconds_used) as avg_usage,
+  AVG(p.included_seconds - pu.seconds_used) as avg_remaining
+FROM user_plans up
+JOIN plans p ON up.plan_id = p.id
+LEFT JOIN plan_usage pu ON pu.user_id = up.user_id AND pu.plan_id = up.plan_id
+WHERE up.status = 'active'
+GROUP BY p.name;
 ```
 
-### Reset Usage for New Period
-
-Usage is automatically reset when a new period starts. The system creates new `plan_usage` records on-demand.
-
-## Pricing Quote Examples
-
-### Basic Quote (No Plan)
-
-```bash
-curl -X POST http://localhost:3000/api/pricing/quote \
-  -H "Authorization: Bearer USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sku_code": "A1-IG",
-    "quantity": 1,
-    "flags": []
-  }'
-```
-
-Response shows full price (no plan discount).
-
-### Quote with Plan
-
-Same request from user with active plan:
-- Shows seconds from plan included
-- Shows overage if usage exceeds plan
-- Calculates total including overage charges
-
-### Batch Quote
-
-```bash
-curl -X POST http://localhost:3000/api/pricing/quote \
-  -H "Authorization: Bearer USER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sku_code": "A1-IG",
-    "quantity": 50,
-    "flags": []
-  }'
-```
-
-Automatically receives 25% batch discount.
-
-## Troubleshooting
-
-### Quote Returns "margin_too_low"
-
-**Problem**: SKU pricing doesn't meet minimum margin requirement.
-
-**Solution**:
-1. Calculate required price:
-   ```
-   min_price = internal_cost / (1 - MIN_MARGIN)
-   ```
-2. Update SKU with higher base_price_cents
-3. Or adjust COST_PER_CREDIT or MIN_MARGIN in environment
-
-### User Reports Incorrect Overage Charges
-
-**Check**:
-1. Verify user's plan: `SELECT * FROM user_plans WHERE user_id = X AND status = 'active'`
-2. Check usage: `SELECT * FROM plan_usage WHERE user_id = X AND period_start >= '...'`
-3. Verify order total_seconds matches expected
-
-### Subscription Not Created After Payment
-
-**Check**:
-1. Stripe webhook logs: `docker logs faceshot-backend | grep webhook`
-2. Verify webhook signature in environment
-3. Check for errors in orders/user_plans tables
-
-## Safety Limits
-
-### Maximum Order Size
-
-Orders are limited to prevent abuse:
-- Maximum quantity: 100 units
-- Maximum job seconds: 5,000 (not currently enforced at API level)
-
-To add enforcement:
-
-```javascript
-// In /api/pricing/quote endpoint
-if (quote.total_seconds > 5000) {
-  return res.status(400).json({ 
-    error: 'order_too_large',
-    message: 'Maximum order size is 5,000 seconds. Please split into multiple orders.'
-  });
-}
-```
-
-### Usage Cap Warnings
-
-Consider implementing warnings when users approach 2x their plan limit to prevent surprise charges.
-
-## Database Maintenance
-
-### Archive Old Usage Records
-
-Keep plan_usage table clean by archiving old periods:
-
-```sql
--- Archive usage older than 12 months
-CREATE TABLE plan_usage_archive AS
-SELECT * FROM plan_usage
-WHERE period_end < date('now', '-12 months');
-
-DELETE FROM plan_usage
-WHERE period_end < date('now', '-12 months');
-```
-
-### Optimize Queries
-
-Ensure indexes exist:
-
-```sql
-CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_plan_usage_period ON plan_usage(user_id, period_start, period_end);
-```
-
-## API Access for Operators
-
-### Get Admin Token
-
-1. Login as admin user
-2. Token is returned in login response
-3. Store securely for API operations
-
-### Admin Endpoints
-
-- `GET /api/admin/stats` - System statistics
-- `PUT /api/admin/plans/:id` - Update plan
-- `PUT /api/admin/skus/:id` - Update SKU
-- `PUT /api/admin/flags/:id` - Update flag
-- `GET /api/admin/flags` - List all flags
-
-All require authentication with admin email in ADMIN_EMAILS environment variable.
-
-## Support Scenarios
-
-### Scenario 1: Customer Wants Custom Pricing
-
-1. Create custom plan or SKU in database
-2. Manually subscribe user or send them custom checkout link
-3. Document in support ticket for reference
-
-### Scenario 2: Refund/Credit Adjustment
-
-1. Identify affected orders
-2. Adjust plan_usage to restore quota
-3. Issue Stripe refund if payment involved
-4. Document in support notes
-
-### Scenario 3: Bulk Discount Request
-
-1. Check if existing batch discount (10+, 50+) applies
-2. If custom discount needed, create special SKU with lower price
-3. Or apply coupon code via Stripe
+---
 
 ## Best Practices
 
-1. **Test Pricing Changes in Staging First**
-   - Always test new SKUs/plans with quote API
-   - Verify margins meet minimum requirements
-   - Check calculations with various quantities
+### Pricing Strategy
 
-2. **Monitor Margins Regularly**
-   - Weekly review of average margins per SKU
-   - Adjust pricing if margins drop below target
-   - Watch for upstream cost changes from A2E
+1. **Always Verify Margins**
+   - Test new SKUs with quote endpoint before launch
+   - Use admin stats to monitor actual margins
+   - Adjust if margins drift below 60%
 
-3. **Communicate Price Changes**
-   - Give users advance notice (30+ days)
-   - Grandfather existing subscriptions when appropriate
-   - Document all changes in changelog
+2. **Competitive Positioning**
+   - Research competitor pricing
+   - Bundle services for higher perceived value
+   - Use flags to create pricing tiers
 
-4. **Audit Trail**
-   - All price changes are logged via admin API
-   - Keep records of who made changes and when
-   - Review logs monthly for anomalies
+3. **Plan Design**
+   - Ensure middle tier (Pro) is most attractive
+   - Price points should show clear value progression
+   - Keep overage rates reasonable (users should upgrade, not pay overages)
 
-## Getting Help
+### Operational Guidelines
 
-For system issues:
-1. Check logs: `docker logs faceshot-backend`
-2. Review database state
-3. Test endpoints with curl/Postman
-4. Contact development team if needed
+1. **Weekly Reviews**
+   - Check SKU performance in admin dashboard
+   - Review unusual orders or margin drops
+   - Monitor A2E.ai credit balance
 
-For business/pricing questions:
-- Review this guide
-- Check historical data in admin stats
-- Consult finance team for margin targets
+2. **Monthly Tasks**
+   - Verify plan usage patterns
+   - Adjust pricing based on A2E.ai rate changes
+   - Review and respond to support tickets
+
+3. **Quarterly Planning**
+   - Introduce new SKUs based on demand
+   - Sunset low-performing offerings
+   - Adjust plan tiers if needed
+
+### Safety Guardrails
+
+**In Code:**
+```javascript
+// Maximum job size (prevent abuse)
+const MAX_JOB_SECONDS = 5000;
+
+// Minimum margin enforcement
+if (margin < MIN_MARGIN) {
+  throw new Error('margin_too_low');
+}
+
+// Plan overage warnings
+if (overageSeconds > 300) {
+  // Alert user before processing
+}
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. "Margin Too Low" Error
+
+**Symptoms:** Quote endpoint returns `margin_too_low` error
+
+**Causes:**
+- SKU base_price_cents too low
+- Too many discount flags applied
+- Batch multiplier too aggressive
+
+**Solution:**
+```javascript
+// Check current margin calculation
+const internalCost = sku.base_credits * 0.0111 * 100; // cents
+const currentMargin = (sku.base_price_cents - internalCost) / sku.base_price_cents;
+
+// Increase base price to achieve 60% margin
+const newPrice = internalCost / (1 - 0.60);
+```
+
+#### 2. Plan Usage Not Deducting
+
+**Symptoms:** Plan seconds remain unchanged after orders
+
+**Causes:**
+- Order status not reaching 'processing'
+- Plan usage record not created
+- Wrong period dates
+
+**Solution:**
+```sql
+-- Check plan usage records
+SELECT * FROM plan_usage 
+WHERE user_id = ? 
+ORDER BY period_start DESC LIMIT 5;
+
+-- Manually create if missing
+INSERT INTO plan_usage (
+  user_id, plan_id, period_start, period_end, 
+  seconds_used, created_at, updated_at
+) VALUES (?, ?, ?, ?, 0, datetime('now'), datetime('now'));
+```
+
+#### 3. Orders Stuck in "Pending"
+
+**Symptoms:** Orders created but never processed
+
+**Causes:**
+- A2E.ai API errors
+- Missing polling job
+- Network timeouts
+
+**Solution:**
+```javascript
+// Check job status in database
+SELECT * FROM jobs WHERE order_id = ?;
+
+// Restart polling if stopped
+startStatusPolling(jobId, type, a2eTaskId);
+
+// Check A2E.ai logs
+// Look for API errors in winston logs
+```
+
+#### 4. Subscription Checkout Fails
+
+**Symptoms:** Stripe session not created
+
+**Causes:**
+- Invalid plan_id
+- Stripe API key missing/invalid
+- User already has active plan
+
+**Solution:**
+```sql
+-- Check for existing active plans
+SELECT * FROM user_plans 
+WHERE user_id = ? 
+AND status = 'active'
+AND end_date > datetime('now');
+
+-- Verify plan exists and is active
+SELECT * FROM plans WHERE id = ? AND active = 1;
+```
+
+### Logs and Debugging
+
+**Enable Debug Logging:**
+```bash
+# Set in environment
+LOG_LEVEL=debug
+
+# Check logs for pricing calculations
+grep "pricing_engine" logs.txt
+
+# Monitor A2E.ai API calls
+grep "a2e_" logs.txt
+```
+
+**Common Log Messages:**
+```
+✓ order_created - Order successfully created
+✓ job_completed - A2E processing finished
+⚠️ margin_too_low - Pricing below minimum
+⚠️ plan_usage_exceeded - User over quota
+✗ a2e_api_error - A2E.ai service issue
+```
+
+---
+
+## Environment Variables
+
+### Required Configuration
+
+```bash
+# Database
+DB_PATH=production.db
+
+# Authentication
+SESSION_SECRET=your-secure-secret-key
+
+# Stripe (for subscriptions)
+STRIPE_SECRET_KEY=sk_live_xxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxx
+
+# A2E.ai Integration
+A2E_API_KEY=your-a2e-api-key
+A2E_BASE_URL=https://video.a2e.ai
+
+# Pricing Configuration
+COST_PER_CREDIT=0.0111
+MIN_MARGIN=0.40
+
+# Admin Access
+ADMIN_EMAILS=admin@example.com,operator@example.com
+
+# Frontend
+FRONTEND_URL=https://your-domain.com
+```
+
+---
+
+## Support & Escalation
+
+### When to Escalate
+
+1. **Margin Falls Below 30%** - Immediate pricing review needed
+2. **A2E.ai API Down** - Contact A2E.ai support
+3. **Mass Subscription Failures** - Check Stripe status
+4. **Database Corruption** - Restore from backup
+
+### Emergency Contacts
+
+- **A2E.ai Support**: support@a2e.ai
+- **Stripe Support**: https://support.stripe.com
+- **Internal DevOps**: [Your team contact]
+
+---
+
+## Appendix
+
+### Complete SKU List
+
+| Code | Name | Vector | Credits | Price |
+|------|------|--------|---------|-------|
+| A1-IG | Instagram Image 1080p | V1 | 60 | $4.99 |
+| A2-BH | Blog Hero 2K | V1 | 90 | $9.99 |
+| A3-4K | 4K Print-Ready | V1 | 140 | $14.99 |
+| A4-BR | Brand-Styled Image | V1 | 180 | $24.99 |
+| B1-30SOC | 30 Social Creatives | V7 | 1800 | $79.00 |
+| B2-90SOC | 90 Creatives + Captions | V7 | 5400 | $199.00 |
+| C1-15 | 15s Promo/Reel | V3 | 90 | $29.00 |
+| C2-30 | 30s Ad/UGC Clip | V3 | 180 | $59.00 |
+| C3-60 | 60s Explainer/YouTube | V3 | 360 | $119.00 |
+| D1-VO30 | 30s Voiceover | V5 | 30 | $15.00 |
+| D2-CLONE | Standard Voice Clone | V4 | 200 | $39.00 |
+| D3-CLPRO | Advanced Voice Clone | V4 | 600 | $99.00 |
+| D4-5PK | 5×30s Voice Spots | V5 | 150 | $59.00 |
+| F1-STARTER | 10 SEO Articles + Images | V6 | 1000 | $49.00 |
+| F2-AUTH | 40 SEO Articles + Linking | V6 | 4000 | $149.00 |
+| F3-DOMINATOR | 150 Articles + Strategy | V6 | 15000 | $399.00 |
+| E1-ECOM25 | E-commerce Pack (25 SKUs) | V7 | 4500 | $225.00 |
+| E2-LAUNCHKIT | Brand Launch Kit | V7 | 3000 | $449.00 |
+| E3-AGENCY100 | Agency Asset Bank | V7 | 10000 | $599.00 |
+
+### API Endpoints Reference
+
+**Public Endpoints:**
+```
+GET  /api/plans              - List subscription plans
+GET  /api/skus               - List SKUs (filter by vector_id)
+GET  /api/flags              - List pricing flags
+GET  /api/vectors            - List service categories
+POST /api/auth/signup        - User registration
+POST /api/auth/login         - User login
+GET  /api/auth/me            - Current user info
+```
+
+**Authenticated Endpoints:**
+```
+POST /api/pricing/quote      - Get pricing quote
+POST /api/orders/create      - Create order
+GET  /api/orders             - List user orders
+GET  /api/orders/:id         - Get order details
+POST /api/subscribe          - Create subscription checkout
+GET  /api/account/plan       - User's plan & usage
+GET  /api/web/credits        - Credit balance
+POST /api/web/process        - Process A2E.ai job
+```
+
+**Admin Endpoints:**
+```
+GET  /api/admin/stats        - Platform statistics
+PUT  /api/admin/plans/:id    - Update plan
+PUT  /api/admin/skus/:id     - Update SKU
+PUT  /api/admin/flags/:id    - Update flag
+GET  /api/admin/flags        - All flags (including inactive)
+```
+
+---
+
+## Changelog
+
+**v1.0.0** - Initial comprehensive pricing system
+- 21 SKUs across 7 service vectors
+- 3-tier subscription plans
+- 6 pricing flags
+- Margin-protected quote engine
+- Admin management panel
+
+---
+
+*For technical implementation details, see [`services/pricing.js`](../services/pricing.js) and [`index.js`](../index.js).*

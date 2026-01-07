@@ -11,7 +11,8 @@ import {
   LogOut,
   Award,
   Clock,
-  Palette
+  Palette,
+  CheckCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,7 +34,7 @@ export default function CreatePage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [selectedCategory, setSelectedCategory] = useState('v1');
   const [skus, setSKUs] = useState<SKU[]>([]);
   const [selectedSKU, setSelectedSKU] = useState<SKU | null>(null);
@@ -44,6 +45,8 @@ export default function CreatePage() {
   const [flags, setFlags] = useState<Flag[]>([]);
   const [selectedFlags, setSelectedFlags] = useState<string[]>([]);
   const [isLoadingFlags, setIsLoadingFlags] = useState(true);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
 
   useEffect(() => {
     loadFlags();
@@ -62,7 +65,7 @@ export default function CreatePage() {
   const loadFlags = async () => {
     setIsLoadingFlags(true);
     const result = await api.getFlags();
-    
+
     if (result.success && result.data) {
       setFlags(result.data);
     } else {
@@ -72,14 +75,14 @@ export default function CreatePage() {
         variant: 'destructive',
       });
     }
-    
+
     setIsLoadingFlags(false);
   };
 
   const loadSKUs = async (vectorId: string) => {
     setIsLoadingSKUs(true);
     const result = await api.getSKUs(vectorId);
-    
+
     if (result.success && result.data) {
       setSKUs(result.data);
       if (result.data.length > 0) {
@@ -92,16 +95,16 @@ export default function CreatePage() {
         variant: 'destructive',
       });
     }
-    
+
     setIsLoadingSKUs(false);
   };
 
   const loadQuote = async (skuCode: string, qty: number, appliedFlags: string[]) => {
     setIsLoadingQuote(true);
     setQuote(null);
-    
+
     const result = await api.getPricingQuote(skuCode, qty, appliedFlags);
-    
+
     if (result.success && result.data) {
       setQuote(result.data);
     } else {
@@ -111,7 +114,7 @@ export default function CreatePage() {
         variant: 'destructive',
       });
     }
-    
+
     setIsLoadingQuote(false);
   };
 
@@ -135,6 +138,50 @@ export default function CreatePage() {
     if (flagCode === 'C') return <Palette className="w-4 h-4" />;
     if (flagCode.startsWith('L_')) return <Award className="w-4 h-4" />;
     return <Check className="w-4 h-4" />;
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!selectedSKU || !quote) return;
+
+    setIsPlacingOrder(true);
+    setOrderSuccess(false);
+
+    try {
+      const result = await api.createOrder({
+        sku_code: selectedSKU.code,
+        quantity,
+        flags: selectedFlags,
+      });
+
+      if (result.success && result.data) {
+        setOrderSuccess(true);
+        toast({
+          title: 'Order placed successfully!',
+          description: `Order #${result.data.order_id} has been created. You will be contacted regarding delivery.`,
+        });
+
+        // Reset form after a delay
+        setTimeout(() => {
+          setOrderSuccess(false);
+          setQuantity(1);
+          setSelectedFlags([]);
+        }, 3000);
+      } else {
+        toast({
+          title: 'Order failed',
+          description: result.error || 'Unable to place order. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Order failed',
+        description: 'An unexpected error occurred. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   const handleLogout = () => {
@@ -166,7 +213,7 @@ export default function CreatePage() {
                 Dashboard
               </Button>
             </Link>
-            
+
             <button
               onClick={handleLogout}
               className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
@@ -203,11 +250,10 @@ export default function CreatePage() {
                       <button
                         key={cat.id}
                         onClick={() => setSelectedCategory(cat.id)}
-                        className={`p-4 rounded-xl border-2 transition-all text-center ${
-                          selectedCategory === cat.id
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border hover:border-primary/30'
-                        }`}
+                        className={`p-4 rounded-xl border-2 transition-all text-center ${selectedCategory === cat.id
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/30'
+                          }`}
                       >
                         <div className="font-semibold">{cat.name}</div>
                         <div className="text-xs text-muted-foreground mt-1">{cat.code}</div>
@@ -219,7 +265,7 @@ export default function CreatePage() {
                 {/* SKU Selection */}
                 <div className="glass-card p-6">
                   <h2 className="text-lg font-semibold mb-4">Select Service</h2>
-                  
+
                   {isLoadingSKUs ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -234,11 +280,10 @@ export default function CreatePage() {
                         <button
                           key={sku.id}
                           onClick={() => setSelectedSKU(sku)}
-                          className={`p-4 rounded-xl border-2 transition-all text-left ${
-                            selectedSKU?.id === sku.id
-                              ? 'border-primary bg-primary/10'
-                              : 'border-border hover:border-primary/30'
-                          }`}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${selectedSKU?.id === sku.id
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border hover:border-primary/30'
+                            }`}
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
@@ -282,12 +327,12 @@ export default function CreatePage() {
                       >
                         <Minus className="w-4 h-4" />
                       </Button>
-                      
+
                       <div className="flex-1 text-center">
                         <div className="text-3xl font-bold">{quantity}</div>
                         <div className="text-sm text-muted-foreground">units</div>
                       </div>
-                      
+
                       <Button
                         variant="outline"
                         size="icon"
@@ -297,7 +342,7 @@ export default function CreatePage() {
                         <Plus className="w-4 h-4" />
                       </Button>
                     </div>
-                    
+
                     {quantity >= 50 && (
                       <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
                         <p className="text-sm text-green-400 flex items-center gap-2">
@@ -328,7 +373,7 @@ export default function CreatePage() {
                     <p className="text-sm text-muted-foreground mb-4">
                       Enhance your order with these optional features. Pricing updates automatically.
                     </p>
-                    
+
                     <div className="space-y-3">
                       {flags
                         .filter(flag => {
@@ -340,11 +385,10 @@ export default function CreatePage() {
                         .map((flag) => (
                           <div
                             key={flag.id}
-                            className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                              selectedFlags.includes(flag.code)
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border hover:border-primary/30'
-                            }`}
+                            className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${selectedFlags.includes(flag.code)
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border hover:border-primary/30'
+                              }`}
                             onClick={() => toggleFlag(flag.code)}
                           >
                             <div className="flex items-start gap-3">
@@ -395,7 +439,7 @@ export default function CreatePage() {
               <div className="space-y-6">
                 <div className="glass-card p-6 sticky top-24">
                   <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
-                  
+
                   {!selectedSKU ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
                       Select a service to see pricing
@@ -431,7 +475,7 @@ export default function CreatePage() {
                           <span className="text-muted-foreground">Base Price</span>
                           <span>${(quote.customerPriceCents / 100).toFixed(2)}</span>
                         </div>
-                        
+
                         {quote.overageSeconds > 0 && (
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">
@@ -440,7 +484,7 @@ export default function CreatePage() {
                             <span className="text-orange-400">${quote.overageCostUsd}</span>
                           </div>
                         )}
-                        
+
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Processing Time</span>
                           <span>{Math.floor(quote.totalSeconds / 60)} minutes</span>
@@ -454,7 +498,7 @@ export default function CreatePage() {
                             ${quote.customerPriceUsd}
                           </span>
                         </div>
-                        
+
                         {quote.secondsFromPlan > 0 && (
                           <div className="text-xs text-muted-foreground">
                             {Math.floor(quote.secondsFromPlan / 60)} min from plan included
@@ -482,10 +526,34 @@ export default function CreatePage() {
                         </div>
                       </div>
 
-                      <Button variant="hero" size="lg" className="w-full">
-                        <ShoppingCart className="w-5 h-5 mr-2" />
-                        Place Order
-                      </Button>
+                      {orderSuccess ? (
+                        <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                          <CheckCircle className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                          <p className="text-sm text-green-400 font-medium">
+                            Order placed successfully!
+                          </p>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="hero"
+                          size="lg"
+                          className="w-full"
+                          onClick={handlePlaceOrder}
+                          disabled={isPlacingOrder}
+                        >
+                          {isPlacingOrder ? (
+                            <>
+                              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                              Placing Order...
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingCart className="w-5 h-5 mr-2" />
+                              Place Order
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center py-8 text-destructive text-sm">
