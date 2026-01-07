@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Zap, Github, Twitter, Mail, Send } from 'lucide-react';
+import { Zap, Github, Twitter, Mail, Send, Facebook } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -66,6 +66,15 @@ export function Footer() {
             © {new Date().getFullYear()} FaceShot-ChopShop. All rights reserved.
           </p>
           <div className="flex items-center gap-4 mt-4 md:mt-0">
+            <a
+              href="https://www.facebook.com/share/17n7HpD2e8/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title="Follow us on Facebook"
+            >
+              <Facebook className="w-5 h-5" />
+            </a>
             <a
               href="https://t.me/FaceSwapVideoAi"
               target="_blank"
