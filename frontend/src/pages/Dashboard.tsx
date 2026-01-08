@@ -319,6 +319,12 @@ export default function Dashboard() {
               <span className="text-muted-foreground text-sm hidden sm:inline">credits</span>
             </div>
 
+            <Link to="/chopshop">
+              <Button variant="outline" size="sm">
+                🎬 Chop Shop
+              </Button>
+            </Link>
+
             <Link to="/pricing">
               <Button variant="glow" size="sm">
                 <Plus className="w-4 h-4 mr-1" />
