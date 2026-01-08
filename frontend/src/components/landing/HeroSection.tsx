@@ -53,11 +53,22 @@ export function HeroSection() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Badge */}
+          {/* NEW: Chop Shop Banner */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 border border-purple-400 mb-4 shadow-lg shadow-purple-500/50"
+          >
+            <Sparkles className="w-5 h-5 text-white animate-pulse" />
+            <span className="text-sm font-bold text-white">🎉 NEW: CHOP SHOP - 16 Professional AI Tools with Full Control!</span>
+          </motion.div>
+
+          {/* Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-8"
           >
             <Award className="w-4 h-4 text-primary" />
