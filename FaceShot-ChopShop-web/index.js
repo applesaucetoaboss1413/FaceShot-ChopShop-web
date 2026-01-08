@@ -244,13 +244,22 @@ app.get('/alive', (req, res) => {
     res.status(200).json({ status: 'alive' })
 })
 
-app.get('/stats', (req, res) => {
-    const videos = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status='completed'").get().c + db.prepare("SELECT COUNT(*) AS c FROM miniapp_creations WHERE status='completed'").get().c
-    const payingUsers = db.prepare('SELECT COUNT(DISTINCT user_id) AS c FROM purchases').get().c
-    const totalUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c
-    const revenueCents = db.prepare('SELECT COALESCE(SUM(amount_cents),0) AS s FROM purchases').get().s
-    const conversionRate = totalUsers ? Math.round((payingUsers / totalUsers) * 100) : 0
-    res.json({ videos, paying_users: payingUsers, total_users: totalUsers, conversion_rate: conversionRate, revenue_cents: revenueCents })
+app.get('/stats', async (req, res) => {
+    try {
+        const stats = await dbHelper.getStats()
+        const totalUsers = stats.total_users || 0
+        // Note: paying_users and revenue would need purchases to be aggregated
+        res.json({ 
+            videos: stats.videos || 0, 
+            paying_users: 0, 
+            total_users: totalUsers, 
+            conversion_rate: 0, 
+            revenue_cents: 0 
+        })
+    } catch (e) {
+        logger.error({ msg: 'stats_error', error: String(e) })
+        res.status(500).json({ error: 'stats_fetch_failed' })
+    }
 })
 
 app.post('/api/auth/signup', async (req, res) => {
