@@ -1074,9 +1074,10 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'pricing_error', details: quoteError.message })
         }
 
+        // BUG 5 FIX: Added stripe_payment_intent_id field (NULL for non-stripe orders)
         const orderResult = db.prepare(`
-            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?)
         `).run(
             userId,
             sku_code,
