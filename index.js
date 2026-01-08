@@ -374,12 +374,15 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
     if (!user) return res.status(404).json({ error: 'user_not_found' })
 
     const credits = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(req.user.id)
+    // BUG 1 FIX: Changed user_subscriptions -> user_plans, subscription_plans -> plans
+    const now = new Date().toISOString()
     const subscription = db.prepare(`
-        SELECT s.*, p.name as plan_name 
-        FROM user_subscriptions s 
-        JOIN subscription_plans p ON s.plan_id = p.id 
-        WHERE s.user_id = ? AND s.status = 'active'
-    `).get(req.user.id)
+        SELECT up.*, p.name as plan_name 
+        FROM user_plans up 
+        JOIN plans p ON up.plan_id = p.id 
+        WHERE up.user_id = ? AND up.status = 'active'
+        AND (up.end_date IS NULL OR up.end_date > ?)
+    `).get(req.user.id, now)
 
     res.json({
         ...user,
