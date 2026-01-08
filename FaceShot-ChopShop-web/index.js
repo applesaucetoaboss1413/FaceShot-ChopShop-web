@@ -116,38 +116,12 @@ const authenticateToken = (req, res, next) => {
     }
 }
 
-const addCredits = (userId, amount) => {
-    const transaction = db.transaction(() => {
-        const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(userId)
-        const newBalance = (current ? current.balance : 0) + amount
-        
-        if (current) {
-            db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, userId)
-        } else {
-            db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, newBalance)
-        }
-        
-        return newBalance
-    })
-    
-    return transaction()
+const addCredits = async (userId, amount) => {
+    return await dbHelper.addCredits(userId, amount)
 }
 
-const deductCredits = (userId, amount) => {
-    const transaction = db.transaction(() => {
-        const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(userId)
-        
-        if (!current || current.balance < amount) {
-            throw new Error('insufficient_credits')
-        }
-        
-        const newBalance = current.balance - amount
-        db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, userId)
-        
-        return newBalance
-    })
-    
-    return transaction()
+const deductCredits = async (userId, amount) => {
+    return await dbHelper.deductCredits(userId, amount)
 }
 
 app.post('/webhook/stripe', async (req, res) => {
