@@ -96,7 +96,7 @@ db.exec(`
         created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, currency TEXT DEFAULT 'usd', created_at TEXT);
     CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY, 
         user_id INTEGER, 
