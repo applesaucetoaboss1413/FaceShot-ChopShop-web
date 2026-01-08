@@ -581,7 +581,42 @@ class A2EService {
                     endpoint = `/api/v1/userMatting/get/${taskId}`
                     break
                 case 'avatar':
+                case 'avatar_video':
+                case 'create_avatar':
                     endpoint = `/api/v1/userAvatar/get/${taskId}`
+                    break
+                case 'text2img':
+                    endpoint = `/api/v1/userText2Image/get/${taskId}`
+                    break
+                case 'nano_banana':
+                    endpoint = `/api/v1/userNanoBanana/get/${taskId}`
+                    break
+                case 'vid2vid':
+                    endpoint = `/api/v1/userVideo2Video/get/${taskId}`
+                    break
+                case 'talking_photo':
+                    endpoint = `/api/v1/userTalkingPhoto/get/${taskId}`
+                    break
+                case 'talking_video':
+                    endpoint = `/api/v1/userTalkingVideo/get/${taskId}`
+                    break
+                case 'tts':
+                    endpoint = `/api/v1/userTTS/get/${taskId}`
+                    break
+                case 'voice_clone':
+                    endpoint = `/api/v1/userVoiceClone/get/${taskId}`
+                    break
+                case 'dubbing':
+                    endpoint = `/api/v1/userDubbing/get/${taskId}`
+                    break
+                case 'caption_removal':
+                    endpoint = `/api/v1/userCaptionRemoval/get/${taskId}`
+                    break
+                case 'virtual_tryon':
+                    endpoint = `/api/v1/userVirtualTryOn/get/${taskId}`
+                    break
+                case 'product_avatar':
+                    endpoint = `/api/v1/userProductAvatar/get/${taskId}`
                     break
                 default:
                     throw new Error(`Unsupported task type: ${type}`)
