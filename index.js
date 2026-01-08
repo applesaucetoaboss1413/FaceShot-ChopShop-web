@@ -387,6 +387,88 @@ app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }))
 app.get('/ready', (req, res) => res.status(200).json({ status: 'ready' }))
 app.get('/alive', (req, res) => res.status(200).json({ status: 'alive' }))
 
+// ============================================
+// MULTI-CURRENCY API ENDPOINTS
+// ============================================
+
+// Get supported currencies
+app.get('/api/currencies', (req, res) => {
+    res.json({
+        supported: SUPPORTED_CURRENCIES,
+        default: DEFAULT_CURRENCY,
+        symbols: CURRENCY_SYMBOLS,
+        zero_decimal: ZERO_DECIMAL_CURRENCIES
+    });
+});
+
+// Get user's preferred currency (from header or query)
+app.get('/api/currency/detect', (req, res) => {
+    const currency = getCurrencyFromRequest(req);
+    res.json({
+        detected: currency,
+        symbol: CURRENCY_SYMBOLS[currency] || '$',
+        is_zero_decimal: ZERO_DECIMAL_CURRENCIES.includes(currency)
+    });
+});
+
+// Credit pack checkout with multi-currency support
+app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
+    try {
+        const { pack_type, currency } = req.body;
+        const userId = req.user.id;
+        
+        const pack = packsConfig.packs.find(p => p.type === pack_type);
+        if (!pack) {
+            return res.status(400).json({ error: 'invalid_pack_type' });
+        }
+        
+        if (!stripe) {
+            return res.status(500).json({ error: 'stripe_not_configured' });
+        }
+        
+        // MULTI-CURRENCY: Validate and use requested currency
+        const requestedCurrency = isValidCurrency(currency) ? currency.toLowerCase() : DEFAULT_CURRENCY;
+        const stripeAmount = convertToStripeAmount(pack.price_cents, requestedCurrency);
+        
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            mode: 'payment',
+            line_items: [{
+                price_data: {
+                    currency: requestedCurrency,
+                    product_data: {
+                        name: `${pack.points} Credits (${pack.type})`,
+                        description: `Credit pack for FaceShot-ChopShop AI tools`
+                    },
+                    unit_amount: stripeAmount
+                },
+                quantity: 1
+            }],
+            success_url: `${process.env.FRONTEND_URL}/dashboard?purchase=success`,
+            cancel_url: `${process.env.FRONTEND_URL}/pricing?purchase=cancelled`,
+            metadata: {
+                user_id: String(userId),
+                points: String(pack.points),
+                pack_type: pack.type,
+                source: 'web',
+                currency: requestedCurrency
+            }
+        });
+        
+        logger.info({ msg: 'checkout_session_created', user_id: userId, pack_type, currency: requestedCurrency, amount: stripeAmount });
+        
+        res.json({ 
+            session_url: session.url, 
+            session_id: session.id,
+            currency: requestedCurrency,
+            amount: stripeAmount
+        });
+    } catch (e) {
+        logger.error({ msg: 'checkout_error', error: String(e), user_id: req.user.id });
+        res.status(500).json({ error: 'checkout_failed', details: e.message });
+    }
+});
+
 app.get('/stats', (req, res) => {
     try {
         const videos = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status='completed'").get().c + db.prepare("SELECT COUNT(*) AS c FROM miniapp_creations WHERE status='completed'").get().c
