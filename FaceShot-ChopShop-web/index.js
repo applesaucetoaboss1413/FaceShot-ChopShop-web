@@ -9,11 +9,13 @@ const cloudinary = require('cloudinary').v2
 const axios = require('axios')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
-const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
 
 dotenv.config()
+
+// MongoDB setup
+const dbHelper = require('./db-helper')
 
 const logger = winston.createLogger({
     level: 'info',
