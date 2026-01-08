@@ -28,7 +28,7 @@ export default function Landing() {
                         className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold mb-4 shadow-lg animate-pulse"
                     >
                         <Sparkles className="w-5 h-5" />
-                        <span>🎉 NEW: THE CHOP SHOP - 16 Pro AI Tools Now Live!</span>
+                        <span>🎉 NEW: THE CHOP SHOP - 20+ Pro AI Tools & Bundles Now Live!</span>
                     </motion.div>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
