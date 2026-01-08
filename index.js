@@ -309,9 +309,30 @@ const SKUToolCatalog = require('./services/sku-tool-catalog')
 
 const pollingJobs = new Map()
 
+// BUG #9 FIX: Maximum polling duration to prevent memory leaks
+const MAX_POLLING_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
 function startStatusPolling(jobId, type, a2eTaskId) {
+    const startTime = Date.now();
+    
     const pollInterval = setInterval(async () => {
         try {
+            // BUG #9 FIX: Check if max duration exceeded
+            if (Date.now() - startTime > MAX_POLLING_DURATION) {
+                logger.warn({ msg: 'polling_timeout_exceeded', jobId, type, a2eTaskId, duration_hours: 24 });
+                
+                // Mark job as failed due to timeout
+                db.prepare(`
+                    UPDATE jobs 
+                    SET status='failed', error_message=?, updated_at=? 
+                    WHERE id=?
+                `).run('Processing timeout exceeded (24 hours)', new Date().toISOString(), jobId);
+                
+                clearInterval(pollInterval);
+                pollingJobs.delete(jobId);
+                return;
+            }
+            
             const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
             const status = await a2eService.getTaskStatus(type, a2eTaskId)
 
