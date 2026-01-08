@@ -40,3 +40,7 @@ trae_projectstelegram-a2e-webfrontend
 build_log.txt
 build_log_root.txt
 status.txt
+-e 
+# Environment files
+*.env
+*.env.*
