@@ -25,17 +25,9 @@ export default function Landing() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
-                        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold mb-4 shadow-lg animate-pulse"
-                    >
-                        <Sparkles className="w-5 h-5" />
-                        <span>🎉 NEW: THE CHOP SHOP - 20+ Pro AI Tools & Bundles Now Live!</span>
-                    </motion.div>
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.05 }}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-100 text-indigo-700 font-medium mb-6"
                     >
+                        <Sparkles className="w-4 h-4" />
                         <span>Powered by A2E AI Technology</span>
                     </motion.div>
                     <motion.h1
@@ -44,7 +36,7 @@ export default function Landing() {
                         transition={{ duration: 0.6 }}
                         className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-4"
                     >
-                        The Chop Shop: 20+ Pro Tools & Bundles
+                        Transform Your Images Like Magic
                     </motion.h1>
                     <motion.p
                         initial={{ opacity: 0, y: 30 }}
@@ -52,7 +44,7 @@ export default function Landing() {
                         transition={{ duration: 0.6, delay: 0.1 }}
                         className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-8"
                     >
-                        From Instagram posts to agency asset banks. 15-second reels to 150 SEO articles. Voice cloning to e-commerce bundles. Everything you need to dominate your market.
+                        Face swap, generate stunning avatars, and convert images to videos in seconds.
                     </motion.p>
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
@@ -62,17 +54,70 @@ export default function Landing() {
                     >
                         <Link to="/signup">
                             <Button variant="hero" size="xl">
-                                🎬 Explore The Chop Shop
+                                Start Creating Free
                                 <ArrowRight className="w-5 h-5 ml-2" />
                             </Button>
                         </Link>
                         <a href="#features">
                             <Button variant="heroOutline" size="xl">
                                 <Play className="w-5 h-5 mr-2" />
-                                See All 20+ Tools
+                                See How It Works
                             </Button>
                         </a>
                     </motion.div>
+
+                    {/* Social Links - Prominent */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.25 }}
+                        className="flex items-center justify-center gap-4 mb-10 flex-wrap"
+                    >
+                        <a 
+                            href="https://t.me/FaceSwapVideoAi" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors shadow-lg"
+                        >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+                            </svg>
+                            <span className="font-semibold">Telegram Channel</span>
+                        </a>
+
+                        <a 
+                            href="https://www.facebook.com/share/17gM2SR4mA/" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
+                        >
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                            </svg>
+                            <span className="font-semibold">Facebook Page</span>
+                        </a>
+
+                        <a 
+                            href="https://telegramalam.onrender.com/miniapp/" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors shadow-lg"
+                        >
+                            <Zap className="w-5 h-5" />
+                            <span className="font-semibold">Mini App</span>
+                        </a>
+
+                        <a 
+                            href="https://t.me/boost/FaceSwapVideoAi" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-colors shadow-lg"
+                        >
+                            <Sparkles className="w-5 h-5" />
+                            <span className="font-semibold">Boost Channel</span>
+                        </a>
+                    </motion.div>
+
                     {stats && (
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
