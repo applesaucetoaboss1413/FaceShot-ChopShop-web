@@ -314,7 +314,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
         
-        const user = db.prepare('SELECT id, email, password_hash, first_name FROM users WHERE email = ?').get(email)
+        const user = await dbHelper.getUserByEmail(email)
         if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
@@ -340,9 +340,9 @@ app.post('/api/auth/login', async (req, res) => {
     }
 })
 
-app.get('/api/auth/me', authenticateToken, (req, res) => {
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
     try {
-        const user = db.prepare('SELECT id, email, first_name FROM users WHERE id = ?').get(req.user.id)
+        const user = await dbHelper.getUserById(req.user.id)
         if (!user) {
             return res.status(401).json({ error: 'unauthorized' })
         }
