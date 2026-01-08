@@ -69,7 +69,7 @@ export default function Landing() {
                         <a href="#features">
                             <Button variant="heroOutline" size="xl">
                                 <Play className="w-5 h-5 mr-2" />
-                                See All 16 Tools
+                                See All 20+ Tools
                             </Button>
                         </a>
                     </motion.div>
