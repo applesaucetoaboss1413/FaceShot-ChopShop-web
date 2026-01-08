@@ -590,6 +590,14 @@ if (process.env.NODE_ENV === 'production') {
     }
 }
 
-app.listen(port, () => {
-    logger.info({ msg: 'server_started', port })
-})
+// Initialize MongoDB and start server
+dbHelper.connect(process.env.MONGODB_URI)
+    .then(() => {
+        app.listen(port, () => {
+            logger.info({ msg: 'server_started', port, database: 'MongoDB Atlas' })
+        })
+    })
+    .catch((err) => {
+        logger.error({ msg: 'server_start_failed', error: err.message })
+        process.exit(1)
+    })
