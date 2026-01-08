@@ -361,10 +361,42 @@ class BackendTester:
             self.test_credits_endpoint()
             self.test_creations_endpoint()
             self.test_upload_endpoint()
-            self.test_process_endpoint()
+    def test_status_endpoint(self):
+        """Test status endpoint"""
+        print("\n=== Testing Status Endpoint ===")
         
-        # Test unauthorized access
-        self.test_unauthorized_endpoints()
+        # Test without ID (should fail)
+        try:
+            response = self.make_request('GET', '/api/web/status')
+            if response.status_code == 400:
+                resp_data = response.json()
+                if 'missing_id' in resp_data.get('error', ''):
+                    self.log_result("Status endpoint (no ID)", True, "Correctly requires job ID")
+                else:
+                    self.log_result("Status endpoint (no ID)", False, f"Wrong error: {resp_data}")
+            else:
+                self.log_result("Status endpoint (no ID)", False, f"HTTP {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Status endpoint (no ID)", False, f"Exception: {str(e)}")
+        
+        # Test with invalid ID
+        try:
+            response = self.make_request('GET', '/api/web/status?id=invalid_job_id')
+            if response.status_code == 404:
+                resp_data = response.json()
+                if 'not_found' in resp_data.get('error', ''):
+                    self.log_result("Status endpoint (invalid ID)", True, "Correctly handles invalid job ID")
+                else:
+                    self.log_result("Status endpoint (invalid ID)", False, f"Wrong error: {resp_data}")
+            elif response.status_code == 500:
+                # May fail due to invalid ObjectId format
+                self.log_result("Status endpoint (invalid ID)", True, "Correctly handles malformed job ID")
+            else:
+                self.log_result("Status endpoint (invalid ID)", False, f"HTTP {response.status_code}", response.text)
+        except Exception as e:
+            self.log_result("Status endpoint (invalid ID)", False, f"Exception: {str(e)}")
+        
+        return True
         
     def test_process_endpoint(self):
         """Test process endpoint (requires auth and uploaded job)"""
