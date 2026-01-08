@@ -481,8 +481,18 @@ app.post('/webhook/stripe', async (req, res) => {
         const session = event.data.object
         const { user_id, points, pack_type, plan_id, source } = session.metadata || {}
 
-        if (source === 'web' && user_id) {
+        // BUG #8 FIX: Validate user_id from metadata
+        const userId = parseInt(user_id);
+        if (!Number.isInteger(userId) || userId <= 0) {
+            logger.error({ msg: 'invalid_user_id_in_webhook', user_id: session.metadata?.user_id, event_id: event.id });
+            return res.status(400).json({ error: 'invalid_user_id' });
+        }
+
+        if (source === 'web') {
             try {
+                // Get currency from session (Stripe returns lowercase currency code)
+                const sessionCurrency = (session.currency || 'usd').toLowerCase();
+                
                 if (plan_id) {
                     const now = new Date()
                     const startDate = now.toISOString()
@@ -491,18 +501,21 @@ app.post('/webhook/stripe', async (req, res) => {
                     db.prepare(`
                         INSERT INTO user_plans (user_id, plan_id, start_date, end_date, auto_renew, stripe_subscription_id, status, created_at)
                         VALUES (?, ?, ?, ?, 1, ?, 'active', ?)
-                    `).run(user_id, plan_id, startDate, endDate, session.subscription, now.toISOString())
+                    `).run(userId, plan_id, startDate, endDate, session.subscription, now.toISOString())
 
-                    logger.info({ msg: 'subscription_created', user_id, plan_id, subscription_id: session.subscription })
+                    logger.info({ msg: 'subscription_created', user_id: userId, plan_id, subscription_id: session.subscription, currency: sessionCurrency })
                 } else if (points) {
-                    db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)').run(
-                        user_id, pack_type, Number(points), session.amount_total, new Date().toISOString()
+                    // BUG #7 FIX: Ensure session.amount_total is properly converted to number
+                    const amountCents = Number(session.amount_total) || 0;
+                    
+                    db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, currency, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+                        userId, pack_type, Number(points), amountCents, sessionCurrency, new Date().toISOString()
                     )
-                    addCredits(user_id, Number(points))
-                    logger.info({ msg: 'payment_success', user_id, points })
+                    addCredits(userId, Number(points))
+                    logger.info({ msg: 'payment_success', user_id: userId, points, amount_cents: amountCents, currency: sessionCurrency })
                 }
             } catch (e) {
-                logger.error({ msg: 'payment_db_error', error: String(e) })
+                logger.error({ msg: 'payment_db_error', error: String(e), user_id: userId })
             }
         }
     }
