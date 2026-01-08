@@ -520,6 +520,11 @@ class ApiClient {
   async getStats(): Promise<ApiResponse<{ videos: number; paying_users: number; total_users: number }>> {
     return this.request<{ videos: number; paying_users: number; total_users: number }>('/stats');
   }
+
+  // Catalog - Get all tools organized by category
+  async getCatalog(): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/web/catalog');
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);
