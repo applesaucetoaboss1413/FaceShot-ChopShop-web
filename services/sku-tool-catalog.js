@@ -422,16 +422,19 @@ class SKUToolCatalog {
      * Get SKU by user's plan - filter tools available to user based on their plan
      */
     getToolsByPlan(userId) {
+        // BUG 2 & 4 FIX: Replace datetime('now') with parameterized dates
+        const now = new Date().toISOString();
+        
         // Get user's active plan
         const userPlan = this.db.prepare(`
             SELECT up.*, p.code as plan_code, p.included_seconds
             FROM user_plans up
             JOIN plans p ON up.plan_id = p.id
             WHERE up.user_id = ? AND up.status = 'active'
-            AND (up.end_date IS NULL OR up.end_date > datetime('now'))
+            AND (up.end_date IS NULL OR up.end_date > ?)
             ORDER BY up.created_at DESC
             LIMIT 1
-        `).get(userId);
+        `).get(userId, now);
 
         const allTools = this.getFullCatalog();
 
@@ -444,15 +447,15 @@ class SKUToolCatalog {
             };
         }
 
-        // Calculate usage
+        // Calculate usage - BUG 2 & 4 FIX: Use parameterized dates
         const usage = this.db.prepare(`
             SELECT seconds_used FROM plan_usage
             WHERE user_id = ? AND plan_id = ?
-            AND period_start <= datetime('now')
-            AND period_end >= datetime('now')
+            AND period_start <= ?
+            AND period_end >= ?
             ORDER BY created_at DESC
             LIMIT 1
-        `).get(userId, userPlan.plan_id);
+        `).get(userId, userPlan.plan_id, now, now);
 
         const remainingSeconds = userPlan.included_seconds - (usage?.seconds_used || 0);
 
