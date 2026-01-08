@@ -878,17 +878,21 @@ app.post('/api/subscribe', authenticateToken, async (req, res) => {
             return res.status(500).json({ error: 'stripe_not_configured' })
         }
 
+        // MULTI-CURRENCY: Get requested currency from request
+        const requestedCurrency = getCurrencyFromRequest(req);
+        const stripeAmount = convertToStripeAmount(plan.monthly_price_cents, requestedCurrency);
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'subscription',
             line_items: [{
                 price_data: {
-                    currency: 'usd',
+                    currency: requestedCurrency, // MULTI-CURRENCY: Use dynamic currency
                     product_data: {
                         name: plan.name,
                         description: plan.description
                     },
-                    unit_amount: plan.monthly_price_cents,
+                    unit_amount: stripeAmount,
                     recurring: {
                         interval: 'month'
                     }
@@ -900,7 +904,8 @@ app.post('/api/subscribe', authenticateToken, async (req, res) => {
             metadata: {
                 user_id: userId,
                 plan_id: plan.id,
-                source: 'web'
+                source: 'web',
+                currency: requestedCurrency
             }
         })
 
