@@ -106,15 +106,16 @@ export function HeroSection() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
           >
             <Link to="/signup">
-              <Button variant="hero" size="xl">
-                Start Creating Free
-                <ArrowRight className="w-5 h-5 ml-1" />
+              <Button variant="hero" size="xl" className="text-lg px-8 py-6">
+                <Sparkles className="w-5 h-5 mr-2" />
+                Explore The Chop Shop
+                <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </Link>
             <a href="#features">
               <Button variant="heroOutline" size="xl">
                 <Play className="w-5 h-5 mr-1" />
-                See How It Works
+                See All 16 Tools
               </Button>
             </a>
           </motion.div>
