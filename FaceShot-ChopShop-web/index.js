@@ -393,9 +393,14 @@ app.post('/api/web/checkout', authenticateToken, async (req, res) => {
     }
 })
 
-app.get('/api/web/credits', authenticateToken, (req, res) => {
-    const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
-    res.json({ balance: creditRow ? creditRow.balance : 0 })
+app.get('/api/web/credits', authenticateToken, async (req, res) => {
+    try {
+        const credits = await dbHelper.getCredits(req.user.id)
+        res.json({ balance: credits.balance })
+    } catch (e) {
+        logger.error({ msg: 'credits_error', error: String(e) })
+        res.status(500).json({ error: 'credits_fetch_failed' })
+    }
 })
 
 app.get('/api/web/creations', authenticateToken, (req, res) => {
