@@ -1225,22 +1225,34 @@ app.get('/api/orders', authenticateToken, (req, res) => {
         `).all(userId, parseInt(String(limit)), parseInt(String(offset)))
 
         res.json({
-            orders: orders.map(o => ({
-                id: o.id,
-                skuCode: o.sku_code,
-                skuName: o.sku_name,
-                skuDescription: o.sku_description,
-                quantity: o.quantity,
-                appliedFlags: JSON.parse(o.applied_flags || '[]'),
-                customerPriceCents: o.customer_price_cents,
-                customerPriceUsd: (o.customer_price_cents / 100).toFixed(2),
-                internalCostCents: o.internal_cost_cents,
-                marginPercent: o.margin_percent,
-                totalSeconds: o.total_seconds,
-                overageSeconds: o.overage_seconds,
-                status: o.status,
-                createdAt: o.created_at
-            }))
+            orders: orders.map(o => {
+                // BUG #10 FIX: Safe JSON parsing with error handling
+                let appliedFlags = [];
+                try {
+                    appliedFlags = o.applied_flags ? JSON.parse(o.applied_flags) : [];
+                } catch (parseError) {
+                    logger.error({ msg: 'json_parse_error', order_id: o.id, applied_flags: o.applied_flags, error: String(parseError) });
+                    appliedFlags = [];
+                }
+                
+                return {
+                    id: o.id,
+                    skuCode: o.sku_code,
+                    skuName: o.sku_name,
+                    skuDescription: o.sku_description,
+                    quantity: o.quantity,
+                    appliedFlags: appliedFlags,
+                    customerPriceCents: o.customer_price_cents,
+                    customerPriceUsd: (o.customer_price_cents / 100).toFixed(2),
+                    internalCostCents: o.internal_cost_cents,
+                    marginPercent: o.margin_percent,
+                    totalSeconds: o.total_seconds,
+                    overageSeconds: o.overage_seconds,
+                    currency: o.currency || 'usd',
+                    status: o.status,
+                    createdAt: o.created_at
+                };
+            })
         })
     } catch (e) {
         logger.error({ msg: 'orders_fetch_error', error: String(e), user_id: req.user.id })
