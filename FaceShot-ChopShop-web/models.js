@@ -50,12 +50,10 @@ const statsSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now }
 });
 
-// Indexes for performance
-userSchema.index({ email: 1 });
+// Indexes for performance (only for fields not already declared as unique in schema)
 jobSchema.index({ user_id: 1, created_at: -1 });
 jobSchema.index({ status: 1 });
 jobSchema.index({ a2e_task_id: 1 });
-userCreditsSchema.index({ user_id: 1 });
 purchaseSchema.index({ user_id: 1, created_at: -1 });
 
 // Models
