@@ -418,8 +418,11 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
             const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
             url = uploaded.secure_url
         }
-        db.prepare('INSERT INTO miniapp_creations (user_id, type, status, url, created_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'uploaded', url, new Date().toISOString())
-        res.json({ status: 'uploaded', url })
+        
+        // Create job with source_url for the upload using MongoDB
+        const job = await dbHelper.createJob(req.user.id, type, url, { uploaded: true })
+        
+        res.json({ status: 'uploaded', url, job_id: job.id })
     } catch (e) {
         logger.error({ msg: 'upload_error', error: String(e) })
         res.status(500).json({ error: 'upload_failed' })
