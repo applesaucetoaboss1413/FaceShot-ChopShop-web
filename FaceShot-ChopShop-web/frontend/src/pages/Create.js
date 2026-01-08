@@ -42,8 +42,7 @@ export default function Create() {
 
     return (
         <div className="p-8 max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold mb-2">🎬 The Chop Shop</h1>
-            <p className="text-gray-600 mb-6">20+ Professional AI Tools & Bundles - From $0.99 to Enterprise</p>
+            <h1 className="text-3xl font-bold mb-6">Create New</h1>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-8">
                 {catalog.map(tool => (
