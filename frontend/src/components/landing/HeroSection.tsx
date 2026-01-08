@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles, Play, Award, Zap } from 'lucide-react';
+import { ArrowRight, Sparkles, Play, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function HeroSection() {
@@ -53,48 +53,6 @@ export function HeroSection() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Social Links - TOP PROMINENT POSITION */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="flex items-center justify-center gap-3 mb-6 flex-wrap"
-          >
-            <a 
-              href="https://t.me/FaceSwapVideoAi" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors shadow-lg text-sm font-semibold"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
-              </svg>
-              Telegram Channel
-            </a>
-
-            <a 
-              href="https://www.facebook.com/share/17gM2SR4mA/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-lg text-sm font-semibold"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-              Facebook
-            </a>
-
-            <a 
-              href="https://telegramalam.onrender.com/miniapp/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-5 py-2.5 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors shadow-lg text-sm font-semibold"
-            >
-              <Zap className="w-4 h-4" />
-              Mini App
-            </a>
-          </motion.div>
-
           {/* Badge */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -106,7 +64,7 @@ export function HeroSection() {
             <span className="text-sm font-medium text-primary">Professional AI-Powered Platform</span>
           </motion.div>
 
-          {/* Main Heading - RESTORED ORIGINAL */}
+          {/* Main Heading */}
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -118,25 +76,14 @@ export function HeroSection() {
             <span className="gradient-text">Like Magic</span>
           </motion.h1>
 
-          {/* UNCENSORED Badge */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="inline-block px-6 py-2 mb-6 rounded-full bg-gradient-to-r from-red-600 to-pink-600 text-white font-bold text-lg shadow-lg shadow-red-500/30"
-          >
-            🔥 UNCENSORED AI TOOLS 🔥
-          </motion.div>
-
-          {/* Subtitle */}
+          {/* Subtitle - with uncensored, private, creator controlled naturally integrated */}
           <motion.p
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10"
           >
-            Face swap, generate stunning avatars, and convert images to videos in seconds. 
-            20+ professional AI tools with complete creative control.
+            Powerful uncensored AI tools designed for creators, marketers, and anyone who wants to transform their visual content. Private, creator-controlled, with 21 professional tools at your fingertips.
           </motion.p>
 
           {/* CTA Buttons */}
@@ -186,6 +133,50 @@ export function HeroSection() {
               <div className="text-3xl sm:text-4xl font-bold gradient-text">99.9%</div>
               <div className="text-sm text-muted-foreground mt-1">Uptime</div>
             </div>
+          </motion.div>
+
+          {/* Social Links - Bottom position with Facebook added */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="flex items-center justify-center gap-4 mt-12 flex-wrap"
+          >
+            <a 
+              href="https://t.me/FaceSwapVideoAi" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+              </svg>
+              Telegram Channel
+            </a>
+            <span className="text-muted-foreground/30">•</span>
+            <a 
+              href="https://telegramalam.onrender.com/miniapp/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+              </svg>
+              Mini App
+            </a>
+            <span className="text-muted-foreground/30">•</span>
+            <a 
+              href="https://www.facebook.com/share/17gM2SR4mA/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+              Facebook
+            </a>
           </motion.div>
         </div>
       </div>
