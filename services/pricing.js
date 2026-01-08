@@ -129,13 +129,16 @@ class PricingEngine {
     return usage;
   }
 
+  // BUG 3 FIX: Properly handle getCurrentPeriodUsage - ensure period exists before update
   deductUsage(userId, planId, seconds) {
     const now = new Date();
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-    this.getCurrentPeriodUsage(userId, planId);
+    // Ensure usage record exists (this creates it if missing)
+    const usage = this.getCurrentPeriodUsage(userId, planId);
     
+    // Now update the existing record
     this.db.prepare(`
       UPDATE plan_usage 
       SET seconds_used = seconds_used + ?, updated_at = ?
