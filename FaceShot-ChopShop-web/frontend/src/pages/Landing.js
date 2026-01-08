@@ -25,9 +25,17 @@ export default function Landing() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
+                        className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold mb-4 shadow-lg animate-pulse"
+                    >
+                        <Sparkles className="w-5 h-5" />
+                        <span>🎉 NEW: THE CHOP SHOP - 16 Pro AI Tools Now Live!</span>
+                    </motion.div>
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.05 }}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-100 text-indigo-700 font-medium mb-6"
                     >
-                        <Sparkles className="w-4 h-4" />
                         <span>Powered by A2E AI Technology</span>
                     </motion.div>
                     <motion.h1
@@ -36,7 +44,7 @@ export default function Landing() {
                         transition={{ duration: 0.6 }}
                         className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-4"
                     >
-                        Transform Your Images Like Magic
+                        The Chop Shop: 16 Professional AI Tools
                     </motion.h1>
                     <motion.p
                         initial={{ opacity: 0, y: 30 }}
@@ -44,7 +52,7 @@ export default function Landing() {
                         transition={{ duration: 0.6, delay: 0.1 }}
                         className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-8"
                     >
-                        Face swap, generate stunning avatars, and convert images to videos in seconds.
+                        Images, Videos, Voice, Avatars & More. Every adjustment available - from resolution to voice cloning. Complete creative control.
                     </motion.p>
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
