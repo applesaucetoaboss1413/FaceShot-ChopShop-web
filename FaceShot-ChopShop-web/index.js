@@ -140,15 +140,16 @@ app.post('/webhook/stripe', async (req, res) => {
 
         if (source === 'web' && user_id) {
             try {
-                db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)').run(
+                // Create purchase record in MongoDB
+                await dbHelper.createPurchase(
                     user_id, 
-                    pack_type, 
-                    Number(points), 
+                    session.id, 
                     session.amount_total, 
-                    new Date().toISOString()
+                    Number(points)
                 )
                 
-                addCredits(user_id, Number(points))
+                // Add credits to user
+                await addCredits(user_id, Number(points))
                 
                 logger.info({ msg: 'payment_success', user_id, points })
             } catch (e) {
