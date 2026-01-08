@@ -633,13 +633,15 @@ configManager.saveConfig('E2-LAUNCHKIT',
         {
             step_order: 0,
             step_name: 'collect_requirements',
-            a2e_endpoint: null, // Internal processing step
+            a2e_endpoint: '/internal/collect_requirements', // Internal processing step (not sent to A2E)
+            http_method: 'POST',
             required: true,
             params_template: {
                 brand_info: '${brand_info}',
                 target_audience: '${target_audience}',
                 industry: '${industry}'
-            }
+            },
+            timeout_seconds: 60
         }
     ],
     [
