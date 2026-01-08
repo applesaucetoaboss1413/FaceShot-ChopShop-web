@@ -403,49 +403,10 @@ app.get('/api/web/credits', authenticateToken, async (req, res) => {
     }
 })
 
-app.get('/api/web/creations', authenticateToken, (req, res) => {
+app.get('/api/web/creations', authenticateToken, async (req, res) => {
     try {
-        const creations = db.prepare(`
-            SELECT 
-                m.id,
-                m.user_id,
-                m.type,
-                m.url as upload_url,
-                m.created_at,
-                j.id as job_id,
-                j.status as job_status,
-                j.result_url,
-                j.cost_credits,
-                j.error_message
-            FROM miniapp_creations m
-            LEFT JOIN jobs j ON j.user_id = m.user_id 
-                AND j.type = m.type 
-                AND j.id = (
-                    SELECT MAX(id) FROM jobs 
-                    WHERE user_id = m.user_id 
-                    AND type = m.type 
-                    AND created_at >= m.created_at
-                )
-            WHERE m.user_id = ?
-            ORDER BY m.id DESC
-            LIMIT 20
-        `).all(req.user.id)
-        
-        const items = creations.map(c => ({
-            id: c.id,
-            user_id: c.user_id,
-            type: c.type,
-            status: c.job_status || 'uploaded',
-            url: c.result_url || c.upload_url,
-            upload_url: c.upload_url,
-            result_url: c.result_url,
-            job_id: c.job_id,
-            cost_credits: c.cost_credits || 0,
-            error_message: c.error_message,
-            created_at: c.created_at
-        }))
-        
-        res.json({ items })
+        const jobs = await dbHelper.getUserJobs(req.user.id, 20)
+        res.json({ items: jobs })
     } catch (e) {
         logger.error({ msg: 'creations_error', error: String(e) })
         res.status(500).json({ error: 'creations_fetch_failed', message: 'Failed to retrieve creations' })
