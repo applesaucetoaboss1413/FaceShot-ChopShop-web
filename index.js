@@ -469,6 +469,45 @@ app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
     }
 });
 
+// Get credit packs with optional currency conversion display
+app.get('/api/web/packs', (req, res) => {
+    const currency = getCurrencyFromRequest(req);
+    const symbol = CURRENCY_SYMBOLS[currency] || '$';
+    
+    res.json({
+        packs: packsConfig.packs.map(p => ({
+            type: p.type,
+            points: p.points,
+            price_cents: p.price_cents,
+            price_display: `${symbol}${(p.price_cents / 100).toFixed(2)}`,
+            currency: currency
+        })),
+        currency: currency,
+        symbol: symbol
+    });
+});
+
+// Get full SKU catalog with currency info
+app.get('/api/web/catalog', (req, res) => {
+    try {
+        const currency = getCurrencyFromRequest(req);
+        const symbol = CURRENCY_SYMBOLS[currency] || '$';
+        
+        const skuCatalog = new SKUToolCatalog(db);
+        const catalog = skuCatalog.getFullCatalog();
+        
+        // Add currency info to response
+        res.json({
+            ...catalog,
+            currency: currency,
+            symbol: symbol
+        });
+    } catch (e) {
+        logger.error({ msg: 'catalog_error', error: String(e) });
+        res.status(500).json({ error: 'catalog_fetch_failed' });
+    }
+});
+
 app.get('/stats', (req, res) => {
     try {
         const videos = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status='completed'").get().c + db.prepare("SELECT COUNT(*) AS c FROM miniapp_creations WHERE status='completed'").get().c
