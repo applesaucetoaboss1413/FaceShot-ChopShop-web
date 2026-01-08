@@ -18,19 +18,21 @@ class SKUToolCatalog {
             'A1-IG': {
                 a2e_tool: 'faceswap',
                 display_name: 'Instagram Image 1080p',
-                description: 'AI-generated social media ready images',
+                description: 'Create stunning social media images optimized for Instagram, Facebook, and TikTok. Perfect for influencers and content creators',
                 category: 'image',
                 icon: '📸',
                 inputs: ['image'],
                 options: {
                     resolution: '1080p',
                     format: 'jpg'
-                }
+                },
+                seo_keywords: ['instagram image maker', 'social media graphics', 'AI instagram post creator'],
+                benefits: ['Instantly ready for posting', 'Perfect 1:1 square format', 'High engagement quality']
             },
             'A2-BH': {
                 a2e_tool: 'img2img',
                 display_name: 'Blog Hero 2K',
-                description: 'High-quality 2K blog header images',
+                description: 'Generate eye-catching 2K blog headers that boost reader engagement and improve SEO rankings',
                 category: 'image',
                 icon: '🖼️',
                 inputs: ['image'],
@@ -38,12 +40,14 @@ class SKUToolCatalog {
                     resolution: '2k',
                     format: 'jpg',
                     enhance: true
-                }
+                },
+                seo_keywords: ['blog header image', 'featured image generator', 'article thumbnail creator'],
+                benefits: ['SEO-optimized dimensions', 'Fast page loading', 'Professional appearance']
             },
             'A3-4K': {
                 a2e_tool: 'enhance',
                 display_name: '4K Print-Ready',
-                description: '4K resolution print-ready images',
+                description: 'Transform images into ultra-high-resolution 4K quality for professional printing, posters, and large format displays',
                 category: 'image',
                 icon: '🎨',
                 inputs: ['image'],
@@ -51,12 +55,14 @@ class SKUToolCatalog {
                     resolution: '4k',
                     format: 'png',
                     enhance: true
-                }
+                },
+                seo_keywords: ['4K image upscaler', 'print ready images', 'high resolution converter'],
+                benefits: ['Professional print quality', 'No pixelation', 'Commercial use ready']
             },
             'A4-BR': {
                 a2e_tool: 'faceswap',
                 display_name: 'Brand-Styled Image',
-                description: 'Custom brand-styled image creation',
+                description: 'Apply your unique brand identity to images with custom colors, styles, and visual elements',
                 category: 'image',
                 icon: '🏢',
                 inputs: ['image', 'prompt'],
@@ -64,14 +70,16 @@ class SKUToolCatalog {
                     custom_branding: true,
                     resolution: '2k',
                     style_transfer: true
-                }
+                },
+                seo_keywords: ['branded content creator', 'custom brand images', 'corporate image styling'],
+                benefits: ['Consistent brand identity', 'Custom styling options', 'Marketing-ready assets']
             },
 
             // ===== SOCIAL BUNDLES (V7) =====
             'B1-30SOC': {
                 a2e_tool: 'batch_img2img',
                 display_name: '30 Social Creatives',
-                description: 'Bundle of 30 social media images',
+                description: 'Supercharge your social media with 30 platform-optimized images. Perfect for monthly content calendars',
                 category: 'bundle',
                 icon: '📱',
                 inputs: ['image', 'prompt'],
@@ -79,12 +87,14 @@ class SKUToolCatalog {
                     batch_size: 30,
                     variations: true,
                     social_formats: ['instagram', 'facebook', 'twitter']
-                }
+                },
+                seo_keywords: ['social media bundle', 'content calendar images', 'bulk social posts'],
+                benefits: ['One month of content', 'Multiple platform formats', 'Time-saving batch creation']
             },
             'B2-90SOC': {
                 a2e_tool: 'batch_img2img',
                 display_name: '90 Creatives + Captions',
-                description: '90 social images with AI-generated captions',
+                description: 'Complete 3-month social media solution with 90 AI-generated images and engaging captions ready to post',
                 category: 'bundle',
                 icon: '💬',
                 inputs: ['image', 'prompt'],
@@ -93,14 +103,16 @@ class SKUToolCatalog {
                     variations: true,
                     generate_captions: true,
                     social_formats: ['instagram', 'facebook', 'twitter', 'linkedin']
-                }
+                },
+                seo_keywords: ['social media automation', 'AI caption generator', 'quarterly content pack'],
+                benefits: ['3 months of content', 'AI-written captions', 'Multi-platform coverage']
             },
 
             // ===== VIDEO GENERATION (V3) =====
             'C1-15': {
                 a2e_tool: 'img2vid',
                 display_name: '15s Promo/Reel',
-                description: '15-second promotional video or reel',
+                description: 'Create viral-worthy 15-second reels and TikTok videos that capture attention and drive engagement',
                 category: 'video',
                 icon: '🎬',
                 inputs: ['image', 'prompt'],
@@ -108,12 +120,14 @@ class SKUToolCatalog {
                     duration: 15,
                     format: 'mp4',
                     fps: 30
-                }
+                },
+                seo_keywords: ['instagram reel maker', 'tiktok video creator', '15 second video'],
+                benefits: ['Perfect for reels', 'Maximum engagement length', 'Social media optimized']
             },
             'C2-30': {
                 a2e_tool: 'img2vid',
                 display_name: '30s Ad/UGC Clip',
-                description: '30-second ad or UGC style video',
+                description: 'Produce authentic 30-second promotional videos and user-generated content style clips that convert viewers into customers',
                 category: 'video',
                 icon: '📹',
                 inputs: ['image', 'prompt'],
@@ -122,12 +136,14 @@ class SKUToolCatalog {
                     format: 'mp4',
                     fps: 30,
                     style: 'ugc'
-                }
+                },
+                seo_keywords: ['video ad creator', 'UGC style video', 'promotional video maker'],
+                benefits: ['Advertising ready', 'UGC authenticity', 'Conversion optimized']
             },
             'C3-60': {
                 a2e_tool: 'img2vid',
                 display_name: '60s Explainer/YouTube',
-                description: '60-second explainer or YouTube video',
+                description: 'Craft compelling 60-second explainer videos and YouTube shorts that educate and inspire your audience',
                 category: 'video',
                 icon: '🎥',
                 inputs: ['image', 'prompt'],
@@ -136,14 +152,16 @@ class SKUToolCatalog {
                     format: 'mp4',
                     fps: 30,
                     youtube_optimized: true
-                }
+                },
+                seo_keywords: ['explainer video maker', 'youtube shorts creator', 'tutorial video'],
+                benefits: ['YouTube optimized', 'Perfect for tutorials', 'Educational content ready']
             },
 
             // ===== VOICE & CLONE (V4/V5) =====
             'D1-VO30': {
                 a2e_tool: 'tts',
                 display_name: '30s Voiceover',
-                description: '30-second professional voiceover',
+                description: 'Generate broadcast-quality 30-second voiceovers perfect for ads, podcasts, and video narration',
                 category: 'voice',
                 icon: '🎙️',
                 inputs: ['text'],
@@ -151,24 +169,28 @@ class SKUToolCatalog {
                     duration: 30,
                     format: 'mp3',
                     voice_type: 'professional'
-                }
+                },
+                seo_keywords: ['AI voiceover generator', 'text to speech professional', 'voice narration'],
+                benefits: ['Professional quality', 'Multiple voice options', 'Instant delivery']
             },
             'D2-CLONE': {
                 a2e_tool: 'voice_clone',
                 display_name: 'Standard Voice Clone',
-                description: 'Standard quality voice cloning',
+                description: 'Clone any voice with standard quality - ideal for creating consistent branded voice content',
                 category: 'voice',
                 icon: '🗣️',
                 inputs: ['audio'],
                 options: {
                     quality: 'standard',
                     sample_duration: 30
-                }
+                },
+                seo_keywords: ['voice cloning AI', 'custom voice generator', 'personal voice AI'],
+                benefits: ['Your unique voice', 'Unlimited use', 'Fast processing']
             },
             'D3-CLPRO': {
                 a2e_tool: 'voice_clone',
                 display_name: 'Advanced Voice Clone',
-                description: 'Professional-grade voice cloning',
+                description: 'Professional-grade voice cloning with emotion control for audiobooks, podcasts, and premium content',
                 category: 'voice',
                 icon: '🎤',
                 inputs: ['audio'],
@@ -176,12 +198,14 @@ class SKUToolCatalog {
                     quality: 'professional',
                     sample_duration: 60,
                     emotion_control: true
-                }
+                },
+                seo_keywords: ['professional voice clone', 'emotion AI voice', 'audiobook narrator'],
+                benefits: ['Studio quality', 'Emotion control', 'Natural inflection']
             },
             'D4-5PK': {
                 a2e_tool: 'tts',
                 display_name: '5x30s Voice Spots',
-                description: 'Package of 5 x 30-second voiceovers',
+                description: 'Bulk create five 30-second voice spots with varied tones for radio ads, announcements, and marketing',
                 category: 'voice',
                 icon: '📻',
                 inputs: ['text'],
@@ -190,14 +214,16 @@ class SKUToolCatalog {
                     duration: 30,
                     format: 'mp3',
                     voice_variety: true
-                }
+                },
+                seo_keywords: ['radio spot creator', 'voice ad package', 'bulk voiceover'],
+                benefits: ['5 unique variations', 'Cost-effective bundle', 'Campaign ready']
             },
 
             // ===== SEO CONTENT (V6) =====
             'F1-STARTER': {
                 a2e_tool: 'text_generation',
                 display_name: '10 SEO Articles + Images',
-                description: '10 SEO-optimized articles with images',
+                description: 'Kickstart your content strategy with 10 SEO-optimized articles and matching images that rank on Google',
                 category: 'content',
                 icon: '📝',
                 inputs: ['prompt'],
@@ -206,12 +232,14 @@ class SKUToolCatalog {
                     seo_optimized: true,
                     include_images: true,
                     word_count: 1000
-                }
+                },
+                seo_keywords: ['SEO article writer', 'blog content generator', 'AI content creation'],
+                benefits: ['Google-friendly content', 'Keyword optimized', 'Images included']
             },
             'F2-AUTH': {
                 a2e_tool: 'text_generation',
                 display_name: '40 SEO Articles + Linking',
-                description: '40 articles with internal link strategy',
+                description: 'Build topical authority with 40 interconnected SEO articles featuring strategic internal linking to dominate search rankings',
                 category: 'content',
                 icon: '🔗',
                 inputs: ['prompt'],
@@ -221,12 +249,14 @@ class SKUToolCatalog {
                     include_images: true,
                     internal_linking: true,
                     word_count: 1500
-                }
+                },
+                seo_keywords: ['content marketing package', 'topical authority builder', 'SEO link strategy'],
+                benefits: ['Topical authority', 'Internal link strategy', 'Search engine dominance']
             },
             'F3-DOMINATOR': {
                 a2e_tool: 'text_generation',
                 display_name: '150 Articles + Strategy',
-                description: 'Complete content domination package',
+                description: 'Dominate your niche with 150 premium SEO articles, comprehensive keyword strategy, and content calendar',
                 category: 'content',
                 icon: '👑',
                 inputs: ['prompt'],
@@ -237,14 +267,16 @@ class SKUToolCatalog {
                     internal_linking: true,
                     content_strategy: true,
                     word_count: 2000
-                }
+                },
+                seo_keywords: ['content domination', 'enterprise SEO package', 'authority site builder'],
+                benefits: ['Market domination', 'Complete strategy', '6 months of content']
             },
 
             // ===== MULTI-MODAL BUNDLES (V7) =====
             'E1-ECOM25': {
                 a2e_tool: 'batch_img2img',
                 display_name: 'E-commerce Pack (25 SKUs)',
-                description: '25 product SKUs with 3 images each',
+                description: 'Launch your online store with 75 professional product images (3 angles per SKU) optimized for Shopify, Amazon, and more',
                 category: 'bundle',
                 icon: '🛒',
                 inputs: ['image', 'prompt'],
@@ -253,12 +285,14 @@ class SKUToolCatalog {
                     images_per_product: 3,
                     ecommerce_optimized: true,
                     white_background: true
-                }
+                },
+                seo_keywords: ['product photography', 'ecommerce images', 'shopify product photos'],
+                benefits: ['Store-ready images', 'Multiple angles', 'White background standard']
             },
             'E2-LAUNCHKIT': {
                 a2e_tool: 'multimodal_bundle',
                 display_name: 'Brand Launch Kit',
-                description: 'Complete brand launch asset package',
+                description: 'Everything you need to launch your brand: logo, banners, social graphics, video intro, and marketing materials',
                 category: 'bundle',
                 icon: '🚀',
                 inputs: ['image', 'prompt', 'text'],
@@ -266,12 +300,14 @@ class SKUToolCatalog {
                     includes: ['logo', 'banner', 'social_posts', 'video_intro'],
                     brand_kit: true,
                     comprehensive: true
-                }
+                },
+                seo_keywords: ['brand launch package', 'startup branding kit', 'business identity'],
+                benefits: ['Complete brand assets', 'Launch-ready materials', 'Cohesive design']
             },
             'E3-AGENCY100': {
                 a2e_tool: 'multimodal_bundle',
                 display_name: 'Agency Asset Bank (100 assets)',
-                description: '100 mixed assets for agency use',
+                description: 'Empower your agency with 100 premium mixed-media assets including images, videos, and graphics with commercial licensing',
                 category: 'bundle',
                 icon: '💼',
                 inputs: ['image', 'prompt', 'text'],
@@ -280,7 +316,9 @@ class SKUToolCatalog {
                     mixed_types: true,
                     commercial_license: true,
                     asset_variety: ['images', 'videos', 'graphics']
-                }
+                },
+                seo_keywords: ['agency asset pack', 'white label content', 'commercial use media'],
+                benefits: ['100 premium assets', 'Commercial rights', 'Client-ready content']
             }
         };
     }
