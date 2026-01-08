@@ -361,6 +361,10 @@ class BackendTester:
             self.test_credits_endpoint()
             self.test_creations_endpoint()
             self.test_upload_endpoint()
+            self.test_process_endpoint()
+        
+        # Test unauthorized access
+        self.test_unauthorized_endpoints()
         
     def test_process_endpoint(self):
         """Test process endpoint (requires auth and uploaded job)"""
