@@ -493,19 +493,15 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
     }
 })
 
-app.get('/api/web/status', (req, res) => {
+app.get('/api/web/status', async (req, res) => {
     try {
         const id = req.query.id
         if (!id) {
             return res.status(400).json({ error: 'missing_id', message: 'Job ID is required' })
         }
         
-        const jobId = Number(id)
-        if (isNaN(jobId)) {
-            return res.status(400).json({ error: 'invalid_id', message: 'Job ID must be a number' })
-        }
-        
-        const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId)
+        // MongoDB uses string IDs (ObjectId)
+        const job = await dbHelper.getJob(id)
         if (!job) {
             return res.status(404).json({ error: 'not_found', message: 'Job not found' })
         }
@@ -514,8 +510,8 @@ app.get('/api/web/status', (req, res) => {
             job_id: job.id,
             status: job.status,
             result_url: job.result_url || null,
-            cost_credits: job.cost_credits || 0,
-            error_message: job.error_message || null,
+            cost_credits: job.credits_used || 0,
+            error_message: job.error || null,
             created_at: job.created_at,
             updated_at: job.updated_at
         })
