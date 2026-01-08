@@ -283,27 +283,21 @@ app.post('/api/auth/signup', async (req, res) => {
             return res.status(400).json({ error: 'password_too_short' })
         }
         
-        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+        const existing = await dbHelper.getUserByEmail(email)
         if (existing) {
             return res.status(409).json({ error: 'email_exists' })
         }
         
         const passwordHash = await bcrypt.hash(password, 10)
-        const result = db.prepare('INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)').run(
-            email, 
-            passwordHash, 
-            new Date().toISOString()
-        )
+        const user = await dbHelper.createUser(email, passwordHash)
         
-        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(result.lastInsertRowid, 0)
-        
-        const token = jwt.sign({ id: result.lastInsertRowid }, process.env.SESSION_SECRET, { expiresIn: '30d' })
+        const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
         
         res.status(201).json({
             token,
             user: {
-                id: result.lastInsertRowid,
-                email,
+                id: user.id,
+                email: user.email,
                 first_name: null
             }
         })
