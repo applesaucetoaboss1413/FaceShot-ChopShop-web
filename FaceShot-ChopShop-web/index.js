@@ -230,21 +230,6 @@ function startStatusPolling(jobId, type, a2eTaskId) {
     
     pollingJobs.set(jobId, pollInterval)
 }
-                    SET status='failed', error_message=?, updated_at=? 
-                    WHERE id=?
-                `).run(errorMessage, new Date().toISOString(), jobId)
-                
-                clearInterval(pollInterval)
-                pollingJobs.delete(jobId)
-                logger.error({ msg: 'job_failed', jobId, errorMessage })
-            }
-        } catch (error) {
-            logger.error({ msg: 'polling_error', jobId, error: String(error) })
-        }
-    }, 10000)
-    
-    pollingJobs.set(jobId, pollInterval)
-}
 
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' })
