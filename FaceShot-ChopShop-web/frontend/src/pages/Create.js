@@ -42,19 +42,21 @@ export default function Create() {
 
     return (
         <div className="p-8 max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6">Create New</h1>
+            <h1 className="text-3xl font-bold mb-2">🎬 The Chop Shop</h1>
+            <p className="text-gray-600 mb-6">16 Professional AI Tools - Complete Creative Control</p>
 
-            <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-8">
                 {catalog.map(tool => (
                     <button
                         key={tool.key}
                         onClick={() => setSelectedTool(tool.key)}
-                        className={`px-4 py-2 rounded whitespace-nowrap ${selectedTool === tool.key
-                                ? 'bg-black text-white'
-                                : 'bg-gray-100 hover:bg-gray-200'
+                        className={`p-3 rounded-lg text-center transition-all ${selectedTool === tool.key
+                                ? 'bg-black text-white shadow-lg scale-105'
+                                : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
                             }`}
                     >
-                        {tool.name}
+                        <div className="text-3xl mb-1">{tool.icon}</div>
+                        <div className="text-xs font-medium">{tool.name}</div>
                     </button>
                 ))}
             </div>
