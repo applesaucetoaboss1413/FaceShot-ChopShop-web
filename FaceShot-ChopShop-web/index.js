@@ -198,11 +198,10 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             if (currentStatus === 'completed' || currentStatus === 'success') {
                 const resultUrl = status.data.result_url || status.data.video_url || status.data.media_url || ''
                 
-                db.prepare(`
-                    UPDATE jobs 
-                    SET status='completed', result_url=?, updated_at=? 
-                    WHERE id=?
-                `).run(resultUrl, new Date().toISOString(), jobId)
+                await dbHelper.updateJob(jobId, {
+                    status: 'completed',
+                    result_url: resultUrl
+                })
                 
                 clearInterval(pollInterval)
                 pollingJobs.delete(jobId)
@@ -210,13 +209,27 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             } else if (currentStatus === 'failed' || currentStatus === 'error') {
                 const errorMessage = status.data.failed_message || status.data.error_message || 'Unknown error'
                 
-                const job = db.prepare('SELECT user_id, cost_credits FROM jobs WHERE id=?').get(jobId)
-                if (job && job.cost_credits > 0) {
-                    db.prepare('UPDATE user_credits SET balance = balance + ? WHERE user_id = ?').run(job.cost_credits, job.user_id)
+                const job = await dbHelper.getJob(jobId)
+                if (job && job.credits_used > 0) {
+                    await dbHelper.addCredits(job.user_id, job.credits_used)
                 }
                 
-                db.prepare(`
-                    UPDATE jobs 
+                await dbHelper.updateJob(jobId, {
+                    status: 'failed',
+                    error: errorMessage
+                })
+                
+                clearInterval(pollInterval)
+                pollingJobs.delete(jobId)
+                logger.error({ msg: 'job_failed', jobId, error: errorMessage })
+            }
+        } catch (err) {
+            logger.error({ msg: 'polling_error', jobId, error: err.message })
+        }
+    }, 10000)
+    
+    pollingJobs.set(jobId, pollInterval)
+}
                     SET status='failed', error_message=?, updated_at=? 
                     WHERE id=?
                 `).run(errorMessage, new Date().toISOString(), jobId)
