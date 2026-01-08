@@ -6,6 +6,7 @@ import Landing from './pages/Landing';
 import Pricing from './pages/Pricing';
 import Dashboard from './pages/Dashboard';
 import Create from './pages/Create';
+import CreateNew from './pages/CreateNew';
 import Status from './pages/Status';
 import FAQs from './pages/FAQs';
 import Auth from './pages/Auth';
@@ -21,7 +22,8 @@ function App() {
                             <Route path="/" element={<Landing />} />
                             <Route path="/pricing" element={<Pricing />} />
                             <Route path="/dashboard" element={<Dashboard />} />
-                            <Route path="/create" element={<Create />} />
+                            <Route path="/create" element={<CreateNew />} />
+                            <Route path="/create-legacy" element={<Create />} />
                             <Route path="/status" element={<Status />} />
                             <Route path="/faqs" element={<FAQs />} />
                             <Route path="/login" element={<Auth type="login" />} />

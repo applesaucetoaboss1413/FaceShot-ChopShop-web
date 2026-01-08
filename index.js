@@ -250,6 +250,7 @@ const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
 const A2EService = require('./services/a2e')
 const PricingEngine = require('./services/pricing')
+const SKUToolCatalog = require('./services/sku-tool-catalog')
 
 const pollingJobs = new Map()
 
@@ -434,6 +435,52 @@ app.get('/api/web/credits', authenticateToken, (req, res) => {
     res.json({ balance: row ? row.balance : 0 })
 })
 
+app.get('/api/web/tool-catalog', authenticateToken, (req, res) => {
+    try {
+        const skuCatalog = new SKUToolCatalog(db)
+        const catalog = skuCatalog.getToolsByPlan(req.user.id)
+        res.json(catalog)
+    } catch (e) {
+        logger.error({ msg: 'tool_catalog_error', error: String(e) })
+        res.status(500).json({ error: 'catalog_fetch_failed' })
+    }
+})
+
+app.get('/api/web/tool-catalog/:sku_code', authenticateToken, (req, res) => {
+    try {
+        const { sku_code } = req.params
+        const skuCatalog = new SKUToolCatalog(db)
+        const toolConfig = skuCatalog.getToolConfig(sku_code)
+        
+        if (!toolConfig) {
+            return res.status(404).json({ error: 'tool_not_found' })
+        }
+
+        const sku = db.prepare('SELECT * FROM skus WHERE code = ? AND active = 1').get(sku_code)
+        if (!sku) {
+            return res.status(404).json({ error: 'sku_not_found' })
+        }
+
+        res.json({
+            sku_code: sku.code,
+            name: sku.name,
+            display_name: toolConfig.display_name,
+            description: sku.description,
+            category: toolConfig.category,
+            icon: toolConfig.icon,
+            base_price_usd: (sku.base_price_cents / 100).toFixed(2),
+            base_price_cents: sku.base_price_cents,
+            base_credits: sku.base_credits,
+            required_inputs: toolConfig.inputs,
+            a2e_tool: toolConfig.a2e_tool,
+            options: toolConfig.options
+        })
+    } catch (e) {
+        logger.error({ msg: 'tool_detail_error', error: String(e), sku_code: req.params.sku_code })
+        res.status(500).json({ error: 'tool_detail_fetch_failed' })
+    }
+})
+
 app.get('/api/web/creations', authenticateToken, (req, res) => {
     try {
         const creations = db.prepare(`
@@ -469,28 +516,44 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
-        const { type, order_id, options = {} } = req.body
+        const { sku_code, type, order_id, options = {}, media_url } = req.body
         const userId = req.user.id
 
-        if (!type) return res.status(400).json({ error: 'invalid_payload' })
+        // Support both SKU code (new) and type (legacy) parameters
+        let skuCodeToUse = sku_code
+        let a2eToolType = type
+
+        if (!skuCodeToUse && !type) {
+            return res.status(400).json({ error: 'sku_code or type required' })
+        }
+
+        // If SKU code provided, get the A2E tool type from catalog
+        if (skuCodeToUse) {
+            const skuCatalog = new SKUToolCatalog(db)
+            const a2eTool = skuCatalog.getA2ETool(skuCodeToUse)
+            if (!a2eTool) {
+                return res.status(400).json({ error: 'invalid_sku_code' })
+            }
+            a2eToolType = a2eTool
+        } else {
+            // Legacy support: map old type to SKU code
+            const typeToSku = {
+                'img2vid': 'C2-30',
+                'faceswap': 'A1-IG',
+                'avatar': 'A1-IG',
+                'enhance': 'A3-4K',
+                'bgremove': 'A1-IG'
+            }
+            skuCodeToUse = typeToSku[type] || 'A1-IG'
+        }
 
         let orderId = order_id
         let quote = null
 
         if (!orderId) {
-            const typeToSku = {
-                'img2vid': 'C2-30',
-                'faceswap': 'A1-IG',
-                'avatar': 'A1-IG',
-                'enhance': 'A1-IG',
-                'bgremove': 'A1-IG'
-            }
-
-            const skuCode = typeToSku[type] || 'A1-IG'
-
             const pricingEngine = new PricingEngine(db)
             try {
-                quote = await pricingEngine.quote(userId, skuCode, 1, [])
+                quote = await pricingEngine.quote(userId, skuCodeToUse, 1, [])
             } catch (quoteError) {
                 logger.error({ msg: 'quote_error', error: String(quoteError) })
                 return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
@@ -501,7 +564,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
                 VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, 'processing', ?)
             `).run(
                 userId,
-                skuCode,
+                skuCodeToUse,
                 quote.customer_price_cents,
                 quote.internal_cost_cents,
                 parseFloat(quote.margin_percent),
@@ -516,19 +579,29 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             if (!order) {
                 return res.status(404).json({ error: 'order_not_found' })
             }
-
+            skuCodeToUse = order.sku_code
             db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('processing', orderId)
         }
 
-        const creation = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(userId, type)
-        if (!creation || !creation.url) {
-            return res.status(400).json({ error: 'no_media_uploaded' })
+        // Get media URL from request or from last upload
+        let mediaUrl = media_url
+        if (!mediaUrl) {
+            const creation = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId)
+            if (!creation || !creation.url) {
+                return res.status(400).json({ error: 'no_media_uploaded' })
+            }
+            mediaUrl = creation.url
         }
+
+        // Get tool-specific options from catalog
+        const skuCatalog = new SKUToolCatalog(db)
+        const toolOptions = skuCatalog.getToolOptions(skuCodeToUse)
+        const mergedOptions = { ...toolOptions, ...options }
 
         const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
         let a2eResponse
         try {
-            a2eResponse = await a2eService.startTask(type, creation.url, options)
+            a2eResponse = await a2eService.startTask(a2eToolType, mediaUrl, mergedOptions)
         } catch (a2eError) {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
             db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
@@ -543,11 +616,11 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
 
         const jobResult = db.prepare(`
-            INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at) 
+            INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?,?)
         `).run(
             userId,
-            type,
+            a2eToolType,
             'processing',
             a2eResponse.data._id,
             a2eResponse.data.coins || (order ? order.total_seconds : 0),
@@ -562,11 +635,12 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             pricingEngine.deductUsage(userId, userPlan.plan_id, order.total_seconds)
         }
 
-        startStatusPolling(jobResult.lastInsertRowid, type, a2eResponse.data._id)
+        startStatusPolling(jobResult.lastInsertRowid, a2eToolType, a2eResponse.data._id)
 
         res.json({
             job_id: jobResult.lastInsertRowid,
             order_id: orderId,
+            sku_code: skuCodeToUse,
             status: 'processing',
             quote
         })
