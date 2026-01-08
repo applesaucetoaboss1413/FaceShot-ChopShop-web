@@ -82,9 +82,9 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight mb-6"
           >
-            Transform Your Images
+            The Chop Shop:
             <br />
-            <span className="gradient-text">Like Magic</span>
+            <span className="gradient-text">16 Pro AI Tools</span>
           </motion.h1>
 
           {/* Subtitle */}
@@ -94,8 +94,8 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10"
           >
-            Face swap, create stunning avatars, and convert images to videos. 
-            All powered by cutting-edge AI in seconds.
+            Images, Videos, Voice, Avatars & More. Every tool, every adjustment, complete creative control. 
+            Simple presets OR advanced customization - you choose.
           </motion.p>
 
           {/* CTA Buttons */}
