@@ -434,13 +434,21 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         const { type, options = {} } = req.body
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
         
-        const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
-        if (!creditRow || creditRow.balance < 10) {
+        // Check credits using MongoDB
+        const creditData = await dbHelper.getCredits(req.user.id)
+        if (!creditData || creditData.balance < 10) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
         
-        const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(req.user.id, type)
-        if (!upload || !upload.url) {
+        // Get the most recent uploaded job/creation for this type using MongoDB
+        const { Job } = require('./models')
+        const upload = await Job.findOne({ 
+            user_id: req.user.id, 
+            type: type,
+            source_url: { $exists: true, $ne: null }
+        }).sort({ created_at: -1 })
+        
+        if (!upload || !upload.source_url) {
             return res.status(400).json({ error: 'no_media_uploaded' })
         }
         
@@ -448,7 +456,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         
         let a2eResponse
         try {
-            a2eResponse = await a2eService.startTask(type, upload.url, options)
+            a2eResponse = await a2eService.startTask(type, upload.source_url, options)
         } catch (a2eError) {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
             return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
@@ -461,33 +469,24 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         const taskId = a2eResponse.data._id
         const costCredits = a2eResponse.data.coins || 10
         
-        const deductCredits = db.transaction((userId, amount) => {
-            const current = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(userId)
-            if (!current || current.balance < amount) {
-                throw new Error('insufficient_credits')
-            }
-            db.prepare('UPDATE user_credits SET balance = balance - ? WHERE user_id = ?').run(amount, userId)
-        })
-        
+        // Deduct credits using MongoDB
         try {
-            deductCredits(req.user.id, costCredits)
+            await dbHelper.deductCredits(req.user.id, costCredits)
         } catch (error) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
         
-        const job = db.prepare('INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, created_at, updated_at) VALUES (?,?,?,?,?,?,?)').run(
-            req.user.id, 
-            type, 
-            'processing', 
-            taskId, 
-            costCredits, 
-            new Date().toISOString(), 
-            new Date().toISOString()
-        )
+        // Update the job with a2e task info using MongoDB
+        await dbHelper.updateJob(upload._id.toString(), {
+            status: 'processing',
+            a2e_task_id: taskId,
+            credits_used: costCredits
+        })
         
-        startStatusPolling(job.lastInsertRowid, type, taskId)
+        // Start polling for this job
+        startStatusPolling(upload._id.toString(), type, taskId)
         
-        res.json({ job_id: job.lastInsertRowid, status: 'processing', estimated_credits: costCredits })
+        res.json({ job_id: upload._id.toString(), status: 'processing', estimated_credits: costCredits })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
         res.status(500).json({ error: 'process_failed' })
