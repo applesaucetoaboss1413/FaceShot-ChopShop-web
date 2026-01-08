@@ -119,6 +119,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/chopshop"
+        element={
+          <ProtectedRoute>
+            <ChopShop />
+          </ProtectedRoute>
+        }
+      />
       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
       <Route path="*" element={<NotFound />} />
     </Routes>
