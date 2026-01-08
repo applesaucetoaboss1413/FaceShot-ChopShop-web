@@ -173,15 +173,8 @@ cloudinary.config({
 
 const upload = multer({ storage: multer.memoryStorage() })
 
-const db = new Database(process.env.DB_PATH || 'production.db')
-db.exec(
-    `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, first_name TEXT, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
-   CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, a2e_task_id TEXT, result_url TEXT, error_message TEXT, cost_credits INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
-   CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);`
-)
+// MongoDB will be initialized on server start
+// No need for CREATE TABLE statements
 
 const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
