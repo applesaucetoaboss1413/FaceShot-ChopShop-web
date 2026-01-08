@@ -25,8 +25,18 @@ class PricingEngine {
     const defaultFlags = JSON.parse(sku.default_flags || '[]');
     const allFlags = [...new Set([...defaultFlags, ...appliedFlags])];
 
-    const flagRecords = allFlags.length > 0 
-      ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${allFlags.map(() => '?').join(',')}) AND active = 1`).all(...allFlags)
+    // BUG 6 FIX: Validate flag codes are alphanumeric before SQL execution
+    const validFlagPattern = /^[A-Za-z0-9_]+$/;
+    const validatedFlags = allFlags.filter(flag => {
+      if (!validFlagPattern.test(flag)) {
+        console.warn(`Invalid flag code rejected: ${flag}`);
+        return false;
+      }
+      return true;
+    });
+
+    const flagRecords = validatedFlags.length > 0 
+      ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${validatedFlags.map(() => '?').join(',')}) AND active = 1`).all(...validatedFlags)
       : [];
 
     let price = sku.base_price_cents * quantity;
