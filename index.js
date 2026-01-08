@@ -1276,6 +1276,15 @@ app.get('/api/orders/:id', authenticateToken, (req, res) => {
             return res.status(404).json({ error: 'order_not_found' })
         }
 
+        // BUG #10 FIX: Safe JSON parsing with error handling
+        let appliedFlags = [];
+        try {
+            appliedFlags = order.applied_flags ? JSON.parse(order.applied_flags) : [];
+        } catch (parseError) {
+            logger.error({ msg: 'json_parse_error', order_id: order.id, applied_flags: order.applied_flags, error: String(parseError) });
+            appliedFlags = [];
+        }
+
         res.json({
             order: {
                 id: order.id,
@@ -1283,13 +1292,14 @@ app.get('/api/orders/:id', authenticateToken, (req, res) => {
                 skuName: order.sku_name,
                 skuDescription: order.sku_description,
                 quantity: order.quantity,
-                appliedFlags: JSON.parse(order.applied_flags || '[]'),
+                appliedFlags: appliedFlags,
                 customerPriceCents: order.customer_price_cents,
                 customerPriceUsd: (order.customer_price_cents / 100).toFixed(2),
                 internalCostCents: order.internal_cost_cents,
                 marginPercent: order.margin_percent,
                 totalSeconds: order.total_seconds,
                 overageSeconds: order.overage_seconds,
+                currency: order.currency || 'usd',
                 status: order.status,
                 createdAt: order.created_at
             }
