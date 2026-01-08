@@ -24,16 +24,51 @@ class A2EService {
     async startTask(type, mediaUrl, options = {}) {
         try {
             switch (type) {
+                // Image Tools
                 case 'faceswap':
                     return await this.startFaceSwap(mediaUrl, options)
-                case 'img2vid':
-                    return await this.startImage2Video(mediaUrl, options)
                 case 'enhance':
                     return await this.startEnhancement(mediaUrl, options)
                 case 'bgremove':
                     return await this.startBackgroundRemoval(mediaUrl, options)
+                case 'text2img':
+                    return await this.startTextToImage(options)
+                case 'nano_banana':
+                    return await this.startNanoBanana(options)
+                
+                // Video Tools
+                case 'img2vid':
+                    return await this.startImage2Video(mediaUrl, options)
+                case 'vid2vid':
+                    return await this.startVideoToVideo(mediaUrl, options)
+                case 'talking_photo':
+                    return await this.startTalkingPhoto(mediaUrl, options)
+                case 'talking_video':
+                    return await this.startTalkingVideo(mediaUrl, options)
+                case 'caption_removal':
+                    return await this.startCaptionRemoval(mediaUrl, options)
+                
+                // Avatar Tools
                 case 'avatar':
-                    return await this.startAvatarCreation(mediaUrl, options)
+                case 'avatar_video':
+                    return await this.startAvatarVideo(options)
+                case 'create_avatar':
+                    return await this.createCustomAvatar(mediaUrl, options)
+                
+                // Voice Tools
+                case 'tts':
+                    return await this.generateTTS(options)
+                case 'voice_clone':
+                    return await this.trainVoiceClone(mediaUrl, options)
+                case 'dubbing':
+                    return await this.startDubbing(mediaUrl, options)
+                
+                // Other Tools
+                case 'virtual_tryon':
+                    return await this.startVirtualTryOn(options)
+                case 'product_avatar':
+                    return await this.startProductAvatar(options)
+                
                 default:
                     throw new Error(`Unsupported task type: ${type}`)
             }
