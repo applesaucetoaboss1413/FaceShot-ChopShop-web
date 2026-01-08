@@ -596,12 +596,26 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
         let url = null
         if (req.file) {
-            const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
-            url = uploaded.secure_url
+            // BUG #11 FIX: Add explicit error handling for Cloudinary upload
+            try {
+                const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
+                
+                if (!uploaded || !uploaded.secure_url) {
+                    logger.error({ msg: 'cloudinary_upload_invalid_response', user_id: req.user.id, type });
+                    return res.status(400).json({ error: 'cloudinary_upload_invalid_response', details: 'Image upload service returned invalid response' });
+                }
+                url = uploaded.secure_url;
+            } catch (cloudinaryError) {
+                logger.error({ msg: 'cloudinary_upload_error', error: String(cloudinaryError), user_id: req.user.id, type });
+                return res.status(500).json({ error: 'upload_failed', details: 'Image upload service error. Please try again.' });
+            }
         }
+        
+        // Only save to database if we have a valid URL or no file was provided
         db.prepare('INSERT INTO miniapp_creations (user_id, type, status, url, created_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'uploaded', url, new Date().toISOString())
         res.json({ status: 'uploaded', url })
     } catch (e) {
+        logger.error({ msg: 'upload_endpoint_error', error: String(e), user_id: req.user.id });
         res.status(500).json({ error: 'upload_failed' })
     }
 })
