@@ -44,7 +44,7 @@ export default function Landing() {
                         transition={{ duration: 0.6 }}
                         className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-4"
                     >
-                        The Chop Shop: 16 Professional AI Tools
+                        The Chop Shop: 20+ Pro Tools & Bundles
                     </motion.h1>
                     <motion.p
                         initial={{ opacity: 0, y: 30 }}
@@ -52,7 +52,7 @@ export default function Landing() {
                         transition={{ duration: 0.6, delay: 0.1 }}
                         className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-8"
                     >
-                        Images, Videos, Voice, Avatars & More. Every adjustment available - from resolution to voice cloning. Complete creative control.
+                        From Instagram posts to agency asset banks. 15-second reels to 150 SEO articles. Voice cloning to e-commerce bundles. Everything you need to dominate your market.
                     </motion.p>
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
