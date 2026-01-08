@@ -183,9 +183,64 @@ try {
 
     const skusInfo = db.prepare('PRAGMA table_info(skus)').all();
     if (!skusInfo.some(col => col.name === 'vector_id')) db.exec('ALTER TABLE skus ADD COLUMN vector_id TEXT');
+
+    // Currency column migrations
+    const purchasesInfo = db.prepare('PRAGMA table_info(purchases)').all();
+    if (!purchasesInfo.some(col => col.name === 'currency')) db.exec('ALTER TABLE purchases ADD COLUMN currency TEXT DEFAULT \'usd\'');
+
+    const ordersInfo = db.prepare('PRAGMA table_info(orders)').all();
+    if (!ordersInfo.some(col => col.name === 'currency')) db.exec('ALTER TABLE orders ADD COLUMN currency TEXT DEFAULT \'usd\'');
 } catch (e) {
     logger.error({ msg: 'migration_error', error: String(e) });
 }
+
+// ============================================
+// MULTI-CURRENCY SUPPORT CONFIGURATION
+// ============================================
+
+// Supported currencies - Stripe supports 135+ currencies
+const SUPPORTED_CURRENCIES = (process.env.SUPPORTED_CURRENCIES || 'usd,eur,gbp,mxn,cad,aud,jpy,cny,inr,brl,chf,sek,nok,dkk,pln,czk,huf,ron,bgn,hrk,rub,try,zar,sgd,hkd,nzd,krw,thb,myr,php,idr,vnd,twd,ars,clp,cop,pen,uyu').split(',').map(c => c.trim().toLowerCase());
+
+const DEFAULT_CURRENCY = (process.env.DEFAULT_CURRENCY || 'mxn').toLowerCase();
+
+// Validate currency function
+const isValidCurrency = (currency) => {
+    if (!currency) return false;
+    return SUPPORTED_CURRENCIES.includes(currency.toLowerCase());
+};
+
+// Get currency from request (supports header, query param, or body)
+const getCurrencyFromRequest = (req) => {
+    const currency = (
+        req.body?.currency ||
+        req.query?.currency ||
+        req.headers['x-currency'] ||
+        DEFAULT_CURRENCY
+    ).toLowerCase();
+    
+    return isValidCurrency(currency) ? currency : DEFAULT_CURRENCY;
+};
+
+// Currency symbol mapping
+const CURRENCY_SYMBOLS = {
+    usd: '$', eur: '€', gbp: '£', mxn: '$', cad: 'C$', aud: 'A$', jpy: '¥', 
+    cny: '¥', inr: '₹', brl: 'R$', chf: 'CHF', sek: 'kr', nok: 'kr', dkk: 'kr',
+    pln: 'zł', czk: 'Kč', huf: 'Ft', ron: 'lei', try: '₺', zar: 'R', sgd: 'S$',
+    hkd: 'HK$', nzd: 'NZ$', krw: '₩', thb: '฿', myr: 'RM', php: '₱', idr: 'Rp',
+    vnd: '₫', twd: 'NT$', ars: '$', clp: '$', cop: '$', pen: 'S/', uyu: '$'
+};
+
+// Zero-decimal currencies (no cents)
+const ZERO_DECIMAL_CURRENCIES = ['jpy', 'krw', 'vnd', 'clp', 'pyg', 'ugx', 'rwf', 'djf', 'gnf', 'kmf', 'vuv', 'xaf', 'xof', 'xpf'];
+
+// Convert amount for Stripe (some currencies don't use decimals)
+const convertToStripeAmount = (amountCents, currency) => {
+    const cur = currency.toLowerCase();
+    if (ZERO_DECIMAL_CURRENCIES.includes(cur)) {
+        return Math.round(amountCents / 100); // Convert cents to whole units
+    }
+    return amountCents; // Keep as cents for other currencies
+};
 
 const addCredits = (userId, amount) => {
     const transaction = db.transaction(() => {
