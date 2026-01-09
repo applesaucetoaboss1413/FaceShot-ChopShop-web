@@ -284,7 +284,15 @@ const authenticateToken = (req, res, next) => {
     const token = auth.slice(7)
     try {
         const payload = jwt.verify(token, process.env.SESSION_SECRET)
-        req.user = { id: payload && payload.id ? payload.id : payload?.sub || 0 }
+        // BUG #4 FIX: Validate that user ID is a positive integer, reject if missing
+        const userId = payload && payload.id ? payload.id : payload?.sub || 0
+        
+        if (!Number.isInteger(userId) || userId <= 0) {
+            logger.warn({ msg: 'invalid_user_id_in_token', user_id: userId, payload })
+            return res.status(401).json({ error: 'invalid_token', details: 'Invalid user ID in token' })
+        }
+        
+        req.user = { id: userId }
         next()
     } catch (e) {
         return res.status(401).json({ error: 'invalid_token' })
@@ -610,6 +618,7 @@ app.post('/webhook/stripe', async (req, res) => {
         }
 
         if (source === 'web') {
+            // BUG #2 FIX: Wrap database operations in try-catch and return proper error codes
             try {
                 // Get currency from session (Stripe returns lowercase currency code)
                 const sessionCurrency = (session.currency || 'usd').toLowerCase();
@@ -636,7 +645,9 @@ app.post('/webhook/stripe', async (req, res) => {
                     logger.info({ msg: 'payment_success', user_id: userId, points, amount_cents: amountCents, currency: sessionCurrency })
                 }
             } catch (e) {
-                logger.error({ msg: 'payment_db_error', error: String(e), user_id: userId })
+                // BUG #2 FIX: Return 500 error so Stripe retries the webhook
+                logger.error({ msg: 'payment_db_error', error: String(e), user_id: userId, event_id: event.id })
+                return res.status(500).json({ error: 'database_error', details: 'Failed to process payment in database' })
             }
         }
     }
@@ -742,16 +753,17 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 })
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
-    try {
-        const { sku_code, type, order_id, options = {}, media_url } = req.body
-        const userId = req.user.id
+    // BUG #3 FIX: Wrap entire order processing in a database transaction
+    const processOrder = db.transaction((requestData) => {
+        const { sku_code, type, order_id, options = {}, media_url } = requestData
+        const userId = requestData.userId
 
         // Support both SKU code (new) and type (legacy) parameters
         let skuCodeToUse = sku_code
         let a2eToolType = type
 
         if (!skuCodeToUse && !type) {
-            return res.status(400).json({ error: 'sku_code or type required' })
+            throw new Error('sku_code or type required')
         }
 
         // If SKU code provided, get the A2E tool type from catalog
@@ -759,7 +771,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             const skuCatalog = new SKUToolCatalog(db)
             const a2eTool = skuCatalog.getA2ETool(skuCodeToUse)
             if (!a2eTool) {
-                return res.status(400).json({ error: 'invalid_sku_code' })
+                throw new Error('invalid_sku_code')
             }
             a2eToolType = a2eTool
         } else {
@@ -775,16 +787,10 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         }
 
         let orderId = order_id
-        let quote = null
 
         if (!orderId) {
             const pricingEngine = new PricingEngine(db)
-            try {
-                quote = await pricingEngine.quote(userId, skuCodeToUse, 1, [])
-            } catch (quoteError) {
-                logger.error({ msg: 'quote_error', error: String(quoteError) })
-                return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
-            }
+            const quote = pricingEngine.quote(userId, skuCodeToUse, 1, [])
 
             // BUG 5 FIX: Added stripe_payment_intent_id field (NULL for non-stripe orders)
             const orderResult = db.prepare(`
@@ -805,11 +811,37 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         } else {
             const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, userId)
             if (!order) {
-                return res.status(404).json({ error: 'order_not_found' })
+                throw new Error('order_not_found')
             }
             skuCodeToUse = order.sku_code
             db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('processing', orderId)
         }
+
+        // BUG #3 FIX: Fetch order and deduct usage atomically within transaction
+        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
+        
+        const pricingEngine = new PricingEngine(db)
+        const userPlan = pricingEngine.getUserActivePlan(userId)
+        if (userPlan && order) {
+            pricingEngine.deductUsage(userId, userPlan.plan_id, order.total_seconds)
+        }
+
+        return { orderId, skuCodeToUse, a2eToolType, order }
+    })
+
+    try {
+        const userId = req.user.id
+        const { sku_code, type, order_id, options = {}, media_url } = req.body
+
+        // Execute transaction
+        const result = processOrder({
+            userId,
+            sku_code,
+            type,
+            order_id,
+            options,
+            media_url
+        })
 
         // Get media URL from request or from last upload
         let mediaUrl = media_url
@@ -823,57 +855,61 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
 
         // Get tool-specific options from catalog
         const skuCatalog = new SKUToolCatalog(db)
-        const toolOptions = skuCatalog.getToolOptions(skuCodeToUse)
+        const toolOptions = skuCatalog.getToolOptions(result.skuCodeToUse)
         const mergedOptions = { ...toolOptions, ...options }
 
         const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
         let a2eResponse
         try {
-            a2eResponse = await a2eService.startTask(a2eToolType, mediaUrl, mergedOptions)
+            a2eResponse = await a2eService.startTask(result.a2eToolType, mediaUrl, mergedOptions)
         } catch (a2eError) {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
-            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', result.orderId)
             return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
         }
 
         if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
-            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', result.orderId)
             return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
         }
-
-        const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
 
         const jobResult = db.prepare(`
             INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?,?)
         `).run(
             userId,
-            a2eToolType,
+            result.a2eToolType,
             'processing',
             a2eResponse.data._id,
-            a2eResponse.data.coins || (order ? order.total_seconds : 0),
-            orderId,
+            a2eResponse.data.coins || (result.order ? result.order.total_seconds : 0),
+            result.orderId,
             new Date().toISOString(),
             new Date().toISOString()
         )
 
-        const pricingEngine = new PricingEngine(db)
-        const userPlan = pricingEngine.getUserActivePlan(userId)
-        if (userPlan && order) {
-            pricingEngine.deductUsage(userId, userPlan.plan_id, order.total_seconds)
-        }
-
-        startStatusPolling(jobResult.lastInsertRowid, a2eToolType, a2eResponse.data._id)
+        startStatusPolling(jobResult.lastInsertRowid, result.a2eToolType, a2eResponse.data._id)
 
         res.json({
             job_id: jobResult.lastInsertRowid,
-            order_id: orderId,
-            sku_code: skuCodeToUse,
+            order_id: result.orderId,
+            sku_code: result.skuCodeToUse,
             status: 'processing',
-            quote
+            quote: null
         })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
+        
+        // Handle specific error types
+        if (e.message === 'sku_code or type required') {
+            return res.status(400).json({ error: e.message })
+        }
+        if (e.message === 'invalid_sku_code') {
+            return res.status(400).json({ error: e.message })
+        }
+        if (e.message === 'order_not_found') {
+            return res.status(404).json({ error: e.message })
+        }
+        
         res.status(500).json({ error: 'process_failed', details: e.message })
     }
 })
