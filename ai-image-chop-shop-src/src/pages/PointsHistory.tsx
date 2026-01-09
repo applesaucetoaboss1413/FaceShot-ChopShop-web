@@ -135,18 +135,26 @@ export default function PointsHistory() {
       }
       return str;
     };
+  const exportToCSV = () => {
+    const escapeCSV = (field: string | number) => {
+      const str = String(field);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
 
     const csv = [
       ['Date', 'Type', 'Description', 'Amount', 'Balance'],
       ...filteredTransactions.map((t) => [
-        escapeCSV(new Date(t.createdAt).toLocaleDateString()),
-        escapeCSV(t.type),
-        escapeCSV(t.description),
-        escapeCSV(t.amount),
-        escapeCSV(t.balance),
+        new Date(t.createdAt).toLocaleDateString(),
+        t.type,
+        t.description,
+        t.amount,
+        t.balance,
       ]),
     ]
-      .map((row) => row.join(','))
+      .map((row) => row.map(escapeCSV).join(','))
       .join('\n');
 
   const stats = {
