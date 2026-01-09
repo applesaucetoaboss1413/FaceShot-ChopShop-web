@@ -301,7 +301,7 @@ class ApiClient {
 
     // BUG #5 FIX: Include user's currency in all requests
     const userCurrency = getUserCurrency();
-    
+
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'x-currency': userCurrency,
@@ -642,7 +642,6 @@ class ApiClient {
     return this.request<{ videos: number; paying_users: number; total_users: number }>('/stats');
   }
 
-<<<<<<< HEAD
   // Enhanced API - SKU Tool Configurations
   async getSKUConfig(skuCode: string): Promise<ApiResponse<SKUConfig>> {
     return this.request<SKUConfig>(`/api/skus/${skuCode}/config`);
@@ -732,11 +731,6 @@ class ApiClient {
   // Enhanced API - Health & Monitoring
   async getA2EHealth(): Promise<ApiResponse<{ status: string; response_time_ms: number }>> {
     return this.request<{ status: string; response_time_ms: number }>('/api/health/a2e');
-=======
-  // Catalog - Get all tools organized by category
-  async getCatalog(): Promise<ApiResponse<any>> {
-    return this.request<any>('/api/web/catalog');
->>>>>>> 67af479e20362b45dc48b9d333788b92111f2678
   }
 }
 
