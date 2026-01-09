@@ -726,19 +726,16 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
         let url = null
         if (req.file) {
-            let uploaded
             try {
-                uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
-            } catch (cloudinaryError) {
-                logger.error({ msg: 'cloudinary_upload_error', error: String(cloudinaryError), user_id: req.user.id, type });
-                return res.status(500).json({ error: 'upload_failed', details: 'Image upload service error. Please try again.' });
+                const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
+                if (!uploaded || !uploaded.secure_url) {
+                    throw new Error('Cloudinary upload returned invalid response: missing secure_url')
+                }
+                url = uploaded.secure_url;
+            } catch (uploadError) {
+                logger.error({ msg: 'upload_failure', error: String(uploadError), user_id: req.user.id, type });
+                return res.status(500).json({ error: 'upload_failed', details: 'Image upload failed. Please try again.' });
             }
-
-            if (!uploaded || !uploaded.secure_url) {
-                logger.error({ msg: 'cloudinary_upload_invalid_response', user_id: req.user.id, type });
-                return res.status(400).json({ error: 'cloudinary_upload_invalid_response', details: 'Image upload service returned invalid response' });
-            }
-            url = uploaded.secure_url;
         }
 
         // Only save to database if we have a valid URL or no file was provided
