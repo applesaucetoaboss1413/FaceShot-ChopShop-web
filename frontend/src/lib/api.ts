@@ -1,9 +1,13 @@
 /**
  * API Service Layer for FaceShot-ChopShop
- * 
- * Uses relative URLs in production so the frontend can communicate 
+ *
+ * Uses relative URLs in production so the frontend can communicate
  * with the Render backend at the same origin.
+ *
+ * BUG #5 FIX: Includes currency detection and sends with all API requests
  */
+
+import { getUserCurrency } from './currency';
 
 const isDevelopment = import.meta.env.DEV;
 
@@ -195,8 +199,12 @@ class ApiClient {
 
     const url = `${this.baseUrl}${endpoint}`;
 
+    // BUG #5 FIX: Include user's currency in all requests
+    const userCurrency = getUserCurrency();
+    
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'x-currency': userCurrency,
       ...options.headers,
     };
 
@@ -204,12 +212,25 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
+    // BUG #5 FIX: Add currency to body for POST/PUT requests
+    let body = options.body;
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      try {
+        const bodyObj = JSON.parse(body as string);
+        bodyObj.currency = bodyObj.currency || userCurrency;
+        body = JSON.stringify(bodyObj);
+      } catch {
+        // If body isn't JSON, leave it as is
+      }
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        body,
       });
-      console.log('[ApiClient] Response received', { endpoint, method, status: response.status });
+      console.log('[ApiClient] Response received', { endpoint, method, status: response.status, currency: userCurrency });
       const data = await response.json();
 
       if (!response.ok) {

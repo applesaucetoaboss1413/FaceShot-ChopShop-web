@@ -1,3 +1,5 @@
+const { getMonthPeriod } = require('./date-utils');
+
 class PricingEngine {
   constructor(db) {
     this.db = db;
@@ -114,16 +116,16 @@ class PricingEngine {
     `).get(userId, now, now);
   }
 
+  // BUG #1 FIX: Use shared date helper for consistent period calculations
   getCurrentPeriodUsage(userId, planId) {
     const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    const { periodStart, periodEnd } = getMonthPeriod(now);
 
     let usage = this.db.prepare(`
-      SELECT * FROM plan_usage 
-      WHERE user_id = ? 
-        AND plan_id = ? 
-        AND period_start = ? 
+      SELECT * FROM plan_usage
+      WHERE user_id = ?
+        AND plan_id = ?
+        AND period_start = ?
         AND period_end = ?
     `).get(userId, planId, periodStart, periodEnd);
 
@@ -139,18 +141,17 @@ class PricingEngine {
     return usage;
   }
 
-  // BUG 3 FIX: Properly handle getCurrentPeriodUsage - ensure period exists before update
+  // BUG #1 FIX: Use shared date helper for consistent period calculations
   deductUsage(userId, planId, seconds) {
     const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    const { periodStart, periodEnd } = getMonthPeriod(now);
 
     // Ensure usage record exists (this creates it if missing)
     const usage = this.getCurrentPeriodUsage(userId, planId);
     
     // Now update the existing record
     this.db.prepare(`
-      UPDATE plan_usage 
+      UPDATE plan_usage
       SET seconds_used = seconds_used + ?, updated_at = ?
       WHERE user_id = ? AND plan_id = ? AND period_start = ? AND period_end = ?
     `).run(seconds, now.toISOString(), userId, planId, periodStart, periodEnd);

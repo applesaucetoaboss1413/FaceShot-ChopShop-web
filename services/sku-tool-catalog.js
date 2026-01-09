@@ -3,6 +3,8 @@
  * Maps all 20 SKUs to their A2E tools and configurations
  */
 
+const { getMonthPeriod } = require('./date-utils');
+
 class SKUToolCatalog {
     constructor(db) {
         this.db = db;
@@ -420,9 +422,9 @@ class SKUToolCatalog {
 
     /**
      * Get SKU by user's plan - filter tools available to user based on their plan
+     * BUG #6 FIX: Use shared date helper for consistent period calculations
      */
     getToolsByPlan(userId) {
-        // BUG 2 & 4 FIX: Replace datetime('now') with parameterized dates
         const now = new Date().toISOString();
         
         // Get user's active plan
@@ -447,15 +449,17 @@ class SKUToolCatalog {
             };
         }
 
-        // Calculate usage - BUG 2 & 4 FIX: Use parameterized dates
+        // BUG #6 FIX: Use shared date helper for consistent period calculations
+        const { periodStart, periodEnd } = getMonthPeriod(new Date());
+        
         const usage = this.db.prepare(`
             SELECT seconds_used FROM plan_usage
             WHERE user_id = ? AND plan_id = ?
-            AND period_start <= ?
-            AND period_end >= ?
+            AND period_start = ?
+            AND period_end = ?
             ORDER BY created_at DESC
             LIMIT 1
-        `).get(userId, userPlan.plan_id, now, now);
+        `).get(userId, userPlan.plan_id, periodStart, periodEnd);
 
         const remainingSeconds = userPlan.included_seconds - (usage?.seconds_used || 0);
 
