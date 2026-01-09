@@ -812,7 +812,10 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
                 throw new Error('order_not_found')
             }
             skuCodeToUse = order.sku_code
-            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('processing', orderId)
+            const updateResult = db.prepare('UPDATE orders SET status = ? WHERE id = ? AND status = ?').run('processing', orderId, 'pending')
+            if (updateResult.changes === 0) {
+                throw new Error('order_already_processing')
+            }
         }
 
         // BUG #3 FIX: Fetch order and deduct usage atomically within transaction
