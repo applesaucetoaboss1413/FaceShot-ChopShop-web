@@ -83,7 +83,7 @@ export function HeroSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto mb-10"
           >
-            Powerful uncensored AI tools designed for creators, marketers, and anyone who wants to transform their visual content. Private, creator-controlled, with 21 professional tools at your fingertips.
+            Powerful uncensored AI tools designed for creators, marketers, and anyone who wants to transform their visual content. Private, creator-controlled, with 20 professional tools at your fingertips.
           </motion.p>
 
           {/* CTA Buttons */}
