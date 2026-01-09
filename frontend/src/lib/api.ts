@@ -9,6 +9,13 @@
 
 import { getUserCurrency } from './currency';
 
+function resolveCurrency(): string {
+  const c = getUserCurrency?.();
+  // Normalize to uppercase string and provide a safe default.
+  const normalized = typeof c === "string" ? c.trim().toUpperCase() : "";
+  return normalized || "USD"; // default presentment currency
+}
+
 const isDevelopment = import.meta.env.DEV;
 
 // In development, proxy through Vite or use localhost
@@ -79,6 +86,7 @@ interface SKU {
   basePriceCents: number;
   defaultFlags: string[];
   description: string;
+  currency: string;
 }
 
 interface PricingQuote {
@@ -258,19 +266,88 @@ interface A2EVoice {
   is_custom: boolean;
 }
 
-type BackendPlan = {
-  id: unknown;
-  code: unknown;
-  name: unknown;
-  monthly_price_usd?: unknown;
-  monthly_price_cents?: unknown;
-  included_seconds?: unknown;
-  description?: unknown;
-};
+interface BackendPricingPlan {
+  id: string | number;
+  code: string;
+  name: string;
+  monthly_price_usd?: string | number;
+  monthly_price_cents?: number;
+  included_seconds?: number;
+  description?: string;
+}
+
+interface BackendSKU {
+  id: string | number;
+  code: string;
+  name: string;
+  vector_id?: string;
+  vector_name?: string;
+  vector_code?: string;
+  base_credits: number;
+  base_price_usd: string;
+  base_price_cents: number;
+  default_flags: string[];
+  description: string;
+}
+
+interface BackendFlag {
+  id: string | number;
+  code: string;
+  label: string;
+  price_multiplier: number;
+  price_add_flat_usd: string;
+  price_add_flat_cents: number;
+  description: string;
+}
+
+interface BackendPricingQuote {
+  sku_code: string;
+  sku_name: string;
+  quantity: number;
+  applied_flags: string[];
+  customer_price_cents: number;
+  customer_price_usd: string;
+  internal_cost_cents: number;
+  internal_cost_usd: string;
+  margin_percent: string;
+  total_seconds: number;
+  seconds_from_plan?: number;
+  overage_seconds?: number;
+  overage_cost_cents?: number;
+  overage_cost_usd?: string;
+  remaining_plan_seconds?: number;
+}
+
+interface BackendAccountPlan {
+  has_plan: boolean;
+  plan?: {
+    id: string | number;
+    code: string;
+    name: string;
+    monthly_price_usd: string;
+    included_seconds: number;
+    overage_rate_per_second_usd: string;
+    description?: string;
+  };
+  subscription?: {
+    start_date: string;
+    end_date: string;
+    auto_renew: boolean;
+    status: string;
+  };
+  usage?: {
+    period_start: string;
+    period_end: string;
+    seconds_used: number;
+    remaining_seconds: number;
+    usage_percent: number;
+  };
+}
 
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
+  private isUpdatingToken = false;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -278,11 +355,17 @@ class ApiClient {
   }
 
   setToken(token: string | null) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('auth_token', token);
-    } else {
-      localStorage.removeItem('auth_token');
+    if (this.isUpdatingToken) return;
+    this.isUpdatingToken = true;
+    try {
+      this.token = token;
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      } else {
+        localStorage.removeItem('auth_token');
+      }
+    } finally {
+      this.isUpdatingToken = false;
     }
   }
 
@@ -299,28 +382,34 @@ class ApiClient {
 
     const url = `${this.baseUrl}${endpoint}`;
 
-    // BUG #5 FIX: Include user's currency in all requests
-    const userCurrency = getUserCurrency();
+    const currency = resolveCurrency();
 
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      'x-currency': userCurrency,
+      'x-currency': currency,
       ...options.headers,
     };
+
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    // BUG #5 FIX: Add currency to body for POST/PUT requests
+    // Guard JSON parsing of body so it never touches FormData and only runs when appropriate
     let body = options.body;
-    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+    if (
+      body &&
+      typeof body === "string" &&
+      (method === "POST" || method === "PUT" || method === "PATCH")
+    ) {
       try {
-        const bodyObj = JSON.parse(body as string);
-        bodyObj.currency = bodyObj.currency || userCurrency;
+        const bodyObj = JSON.parse(body);
+        bodyObj.currency = bodyObj.currency || currency;
         body = JSON.stringify(bodyObj);
       } catch {
-        // If body isn't JSON, leave it as is
+        // leave body unchanged on parse error
       }
     }
 
@@ -330,7 +419,7 @@ class ApiClient {
         headers,
         body,
       });
-      console.log('[ApiClient] Response received', { endpoint, method, status: response.status, currency: userCurrency });
+      console.log('[ApiClient] Response received', { endpoint, method, status: response.status, currency });
       const data = await response.json();
 
       if (!response.ok) {
@@ -416,9 +505,9 @@ class ApiClient {
   async getCredits(): Promise<ApiResponse<{ balance: number }>> {
     return this.request<{ balance: number }>('/api/web/credits');
   }
-
   async getPricingPlans(): Promise<ApiResponse<PricingPlan[]>> {
-    const result = await this.request<{ plans: BackendPlan[] }>('/api/plans');
+
+    const result = await this.request<{ plans: BackendPricingPlan[] }>('/api/plans');
 
     if (!result.success || !result.data) {
       return {
@@ -429,7 +518,7 @@ class ApiClient {
 
     const plans = Array.isArray(result.data.plans) ? result.data.plans : [];
 
-    const normalized: PricingPlan[] = plans.map((plan) => ({
+    const normalized: PricingPlan[] = plans.map((plan: BackendPricingPlan) => ({
       id: String(plan.id),
       code: String(plan.code),
       name: String(plan.name),
@@ -479,19 +568,22 @@ class ApiClient {
       };
     }
 
-    const skus: SKU[] = (result.data.skus || []).map((sku: any) => ({
-      id: String(sku.id),
-      code: String(sku.code),
-      name: String(sku.name),
-      vectorId: String(sku.vector_id || ''),
-      vectorName: String(sku.vector_name || ''),
-      vectorCode: String(sku.vector_code || ''),
-      baseCredits: Number(sku.base_credits) || 0,
-      basePriceUsd: String(sku.base_price_usd || '0.00'),
-      basePriceCents: Number(sku.base_price_cents) || 0,
-      defaultFlags: Array.isArray(sku.default_flags) ? sku.default_flags : [],
-      description: String(sku.description || ''),
-    }));
+    const skus: SKU[] = (result.data.skus || [])
+      .filter((sku: any) => sku && sku.id && sku.code && sku.name)
+      .map((sku: any) => ({
+        id: String(sku.id),
+        code: String(sku.code),
+        name: String(sku.name),
+        vectorId: String(sku.vector_id || ''),
+        vectorName: String(sku.vector_name || ''),
+        vectorCode: String(sku.vector_code || ''),
+        baseCredits: Number(sku.base_credits) || 0,
+        basePriceUsd: String(sku.base_price_usd || '0.00'),
+        basePriceCents: Number(sku.base_price_cents) || 0,
+        defaultFlags: Array.isArray(sku.default_flags) ? sku.default_flags : [],
+        description: String(sku.description || ''),
+        currency: (sku.currency || resolveCurrency()).toUpperCase(),
+      }));
 
     return {
       success: true,
@@ -510,7 +602,7 @@ class ApiClient {
       };
     }
 
-    const flags: Flag[] = (result.data.flags || []).map((flag: any) => ({
+    const flags: Flag[] = (result.data.flags || []).map((flag: BackendFlag) => ({
       id: String(flag.id),
       code: String(flag.code),
       label: String(flag.label),
@@ -532,9 +624,9 @@ class ApiClient {
     quantity: number = 1,
     flags: string[] = []
   ): Promise<ApiResponse<PricingQuote>> {
-    const result = await this.request<{ quote: any }>('/api/pricing/quote', {
+    const result = await this.request<{ quote: BackendPricingQuote }>('/api/pricing/quote', {
       method: 'POST',
-      body: JSON.stringify({ sku_code: skuCode, quantity, flags }),
+      body: JSON.stringify({ sku_code: skuCode, quantity, flags, currency: resolveCurrency() }),
     });
 
     if (!result.success || !result.data?.quote) {
@@ -544,7 +636,7 @@ class ApiClient {
       };
     }
 
-    const q = result.data.quote;
+    const q: BackendPricingQuote = result.data.quote;
     const quote: PricingQuote = {
       skuCode: String(q.sku_code),
       skuName: String(q.sku_name),
@@ -571,7 +663,7 @@ class ApiClient {
 
   // Account Plan Info
   async getAccountPlan(): Promise<ApiResponse<AccountPlan>> {
-    const result = await this.request<any>('/api/account/plan');
+    const result = await this.request<BackendAccountPlan>('/api/account/plan');
 
     if (!result.success || !result.data) {
       return {
@@ -580,7 +672,7 @@ class ApiClient {
       };
     }
 
-    const data = result.data;
+    const data: BackendAccountPlan = result.data;
 
     if (!data.has_plan) {
       return {
@@ -625,7 +717,7 @@ class ApiClient {
   async createOrder(payload: CreateOrderPayload): Promise<ApiResponse<{ order_id: number; quote: PricingQuote; status: string; message: string }>> {
     return this.request<{ order_id: number; quote: PricingQuote; status: string; message: string }>('/api/orders/create', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, currency: resolveCurrency() }),
     });
   }
 
@@ -676,39 +768,10 @@ class ApiClient {
     formData.append('file', file);
     formData.append('type', type);
 
-    const url = `${this.baseUrl}/api/upload/media`;
-    const headers: HeadersInit = {};
-
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error || 'Upload failed',
-        };
-      }
-
-      return {
-        success: true,
-        data,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Upload failed',
-      };
-    }
+    return this.request<{ url: string; cloudinary_id: string }>('/api/upload/media', {
+      method: 'POST',
+      body: formData,
+    });
   }
 
   // Enhanced API - A2E Resources

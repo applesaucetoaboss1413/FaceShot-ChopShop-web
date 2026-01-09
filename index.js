@@ -422,7 +422,7 @@ app.get('/api/currency/detect', (req, res) => {
 // Credit pack checkout with multi-currency support
 app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
     try {
-        const { pack_type, currency } = req.body;
+        const { pack_type } = req.body;
         const userId = req.user.id;
 
         const pack = packsConfig.packs.find(p => p.type === pack_type);
@@ -435,7 +435,7 @@ app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
         }
 
         // MULTI-CURRENCY: Validate and use requested currency
-        const requestedCurrency = isValidCurrency(currency) ? currency.toLowerCase() : DEFAULT_CURRENCY;
+        const requestedCurrency = getCurrencyFromRequest(req);
         const stripeAmount = convertToStripeAmount(pack.price_cents, requestedCurrency);
 
         const session = await stripe.checkout.sessions.create({
@@ -1320,12 +1320,14 @@ app.get('/api/admin/flags', authenticateToken, isAdmin, (req, res) => {
 
 app.post('/api/orders/create', authenticateToken, async (req, res) => {
     try {
-        const { sku_code, quantity = 1, flags = [] } = req.body
+        const { sku_code, quantity = 1, flags = [], currency } = req.body
         const userId = req.user.id
 
         if (!sku_code) {
             return res.status(400).json({ error: 'sku_code_required' })
         }
+
+        const requestedCurrency = getCurrencyFromRequest(req);
 
         const pricingEngine = new PricingEngine(db)
         let quote
@@ -1339,8 +1341,8 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
 
         // BUG 5 FIX: Added stripe_payment_intent_id field (NULL for non-stripe orders)
         const orderResult = db.prepare(`
-            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?)
+            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, currency, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'pending', ?)
         `).run(
             userId,
             sku_code,
@@ -1351,6 +1353,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
             parseFloat(quote.margin_percent),
             quote.total_seconds,
             quote.overage_seconds,
+            requestedCurrency,
             new Date().toISOString()
         )
 
