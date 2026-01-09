@@ -6,15 +6,36 @@ import { useState } from 'react';
 
 const subscriptionPlans = [
   {
+    name: 'Free',
+    price: 0,
+    credits: 100,
+    description: 'Try before you buy',
+    videoMinutes: 'N/A',
+    videoSpecs: 'Basic quality only',
+    features: [
+      '100 credits (one-time)',
+      '1 face swap',
+      '1 AI avatar (basic)',
+      'Standard quality',
+      'All tools accessible',
+      'Email support',
+    ],
+    popular: false,
+    bestFor: 'Test & Learn',
+    isFree: true,
+  },
+  {
     name: 'Starter',
     price: 19.99,
     credits: 4000,
     description: 'Perfect for occasional creators',
-    videoMinutes: '~10 minutes',
+    videoMinutes: '~10 minutes total',
+    videoSpecs: 'Max 60s per video, SD quality',
     features: [
       '4,000 credits/month',
       '~40 face swaps',
-      '~8 image-to-video',
+      '~13 AI avatars',
+      '20x 30s videos (SD)',
       'All AI tools included',
       'Standard quality',
       'Email support',
@@ -27,11 +48,13 @@ const subscriptionPlans = [
     price: 79.99,
     credits: 20000,
     description: 'Best for regular creators',
-    videoMinutes: '~50 minutes',
+    videoMinutes: '~50 minutes total',
+    videoSpecs: 'Max 120s per video, HD quality',
     features: [
       '20,000 credits/month',
       '~200 face swaps',
-      '~40 image-to-video',
+      '~66 AI avatars',
+      '100x 30s videos (HD)',
       'Priority processing',
       'HD quality output',
       'Priority support',
@@ -45,11 +68,13 @@ const subscriptionPlans = [
     price: 199,
     credits: 60000,
     description: 'For teams and agencies',
-    videoMinutes: '~150 minutes',
+    videoMinutes: '~150 minutes total',
+    videoSpecs: 'Max 300s per video, 4K quality',
     features: [
       '60,000 credits/month',
       'Unlimited face swaps',
-      'Unlimited videos',
+      '~200 AI avatars',
+      '300x 30s videos (4K)',
       'Fastest processing',
       '4K quality output',
       'Dedicated support',
@@ -206,7 +231,7 @@ export function EnhancedPricingSection() {
         </motion.div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto mb-12">
           {currentPlans.map((plan, index) => (
             <motion.div
               key={plan.name}
@@ -242,18 +267,27 @@ export function EnhancedPricingSection() {
                 <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
                 <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
                 <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-4xl font-bold">${plan.price}</span>
-                  <span className="text-muted-foreground">
-                    {pricingType === 'subscription' ? '/month' : 'one-time'}
+                  <span className="text-4xl font-bold">
+                    {plan.price === 0 ? 'FREE' : `$${plan.price}`}
                   </span>
+                  {plan.price > 0 && (
+                    <span className="text-muted-foreground">
+                      {pricingType === 'subscription' ? '/month' : 'one-time'}
+                    </span>
+                  )}
                 </div>
                 <div className="mt-2">
                   <div className="text-primary font-semibold">
                     {plan.credits.toLocaleString()} Credits
                   </div>
-                  {'videoMinutes' in plan && (
+                  {'videoMinutes' in plan && plan.videoMinutes && (
                     <div className="text-xs text-muted-foreground mt-1">
-                      {plan.videoMinutes} of video
+                      {plan.videoMinutes}
+                    </div>
+                  )}
+                  {'videoSpecs' in plan && plan.videoSpecs && pricingType === 'subscription' && (
+                    <div className="text-xs text-muted-foreground/80 mt-0.5">
+                      {plan.videoSpecs}
                     </div>
                   )}
                 </div>
