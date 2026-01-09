@@ -15,7 +15,7 @@ RUN npm ci --omit=dev
 
 COPY index.js ./
 COPY shared/ ./shared/
-COPY --from=frontend-builder /app/frontend/build ./frontend/build
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 ENV NODE_ENV=production
 ENV PORT=3000

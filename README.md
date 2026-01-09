@@ -129,23 +129,51 @@ Frontend runs on `http://localhost:8080` with hot reload
 
 ## Build & Deploy
 
-### Build Frontend
-```bash
-cd frontend
-npm run build
-```
-This creates an optimized production build in `frontend/dist/`
+### Single Source of Truth
 
-### Production Start
+All deployment configurations use the same standardized commands:
+
+#### Frontend Build Process
 ```bash
-# Backend serves frontend build
+# Install backend dependencies
+npm install
+
+# Install frontend dependencies and build
+cd frontend && npm install && npm run build
+```
+**Result**: Creates `frontend/dist/` directory with optimized production build
+
+#### Backend Start Process
+```bash
+# Serve built frontend + API
 NODE_ENV=production node index.js
 ```
+**Behavior**: Express serves static files from `frontend/dist/` and handles API routes
 
-### Render Deployment
-1. Set environment variables in Render dashboard
-2. Use build command: `npm install && cd frontend && npm install && npm run build`
-3. Use start command: `node index.js`
+### Platform-Specific Configurations
+
+#### Local Development
+```bash
+# Start backend (serves built frontend)
+npm start
+```
+
+#### Docker
+```bash
+# Build and run
+docker-compose up --build
+```
+
+#### Render
+- **Build Command**: `npm install && cd frontend && npm install && npm run build`
+- **Start Command**: `NODE_ENV=production node index.js`
+
+#### Vercel (Frontend Only)
+- **Build Command**: `cd frontend && npm install && npm run build`
+- **Output Directory**: `frontend/dist`
+
+### Environment Variables
+All platforms use the same environment variable names (see `.env.example`)
 
 ## Database Schema
 
@@ -166,6 +194,47 @@ NODE_ENV=production node index.js
 - `orders` - Order history with pricing details
 
 **Migration**: Tables created automatically via `CREATE TABLE IF NOT EXISTS` on server start.
+
+### Database Migration Guide
+
+#### Environment Separation
+- **Development**: Use `dev.db` (default) - ignored by Git, safe for local development
+- **Production**: Use `production.db` or external database path - never committed to Git
+- **Staging/Testing**: Use separate database files or environment-specific paths
+
+#### Configuration
+Set `DB_PATH` environment variable to control database location:
+```env
+# Development (default)
+DB_PATH=dev.db
+
+# Production
+DB_PATH=/var/data/production.db
+
+# Future Postgres migration
+DB_PATH=postgresql://user:pass@host:5432/dbname
+```
+
+#### Migration Strategy
+The app uses lightweight migrations compatible with SQLite:
+1. **Automatic Schema Creation**: `CREATE TABLE IF NOT EXISTS` ensures tables exist
+2. **Column Additions**: `ALTER TABLE ADD COLUMN IF NOT EXISTS` for schema evolution
+3. **Data Seeding**: Initial data inserted with `INSERT OR IGNORE` to prevent duplicates
+
+#### Resetting Database
+To reset your database (⚠️ **destroys all data**):
+```bash
+# Remove database file
+rm dev.db  # or production.db
+
+# Restart server (auto-creates tables and seeds data)
+npm start
+```
+
+#### Security Notes
+- Database files contain sensitive user data - never commit to version control
+- Use environment-specific database files to prevent data mixing
+- Consider encrypting database files in production environments
 
 ## API Endpoints
 

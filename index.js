@@ -15,8 +15,11 @@ const fs = require('fs')
 
 dotenv.config()
 
+// Load and validate configuration (fails fast if required env vars missing)
+const config = require('./config')
+
 const logger = winston.createLogger({
-    level: process.env.LOG_LEVEL || 'info',
+    level: config.logLevel,
     format: winston.format.json(),
     transports: [new winston.transports.Console()]
 })
@@ -31,7 +34,25 @@ app.use(express.json({
     }
 }))
 app.use(express.urlencoded({ extended: true }))
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }))
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
+        if (!origin) return callback(null, true);
+
+        // Allow localhost development
+        if (origin.includes('localhost')) return callback(null, true);
+
+        // Allow configured frontend URL
+        if (config.frontendUrl && origin === config.frontendUrl) return callback(null, true);
+
+        // Allow same origin (production)
+        if (config.publicUrl && origin === config.publicUrl) return callback(null, true);
+
+        // Reject other origins
+        return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true
+}))
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
@@ -83,7 +104,7 @@ const limiter = (req, res, next) => {
     next()
 }
 
-const db = new Database(process.env.DB_PATH || 'production.db')
+const db = new Database(config.dbPath)
 
 // Initialize DB and migrate if necessary
 db.exec(`
@@ -199,9 +220,9 @@ try {
 // ============================================
 
 // Supported currencies - Stripe supports 135+ currencies
-const SUPPORTED_CURRENCIES = (process.env.SUPPORTED_CURRENCIES || 'usd,eur,gbp,mxn,cad,aud,jpy,cny,inr,brl,chf,sek,nok,dkk,pln,czk,huf,ron,bgn,hrk,rub,try,zar,sgd,hkd,nzd,krw,thb,myr,php,idr,vnd,twd,ars,clp,cop,pen,uyu').split(',').map(c => c.trim().toLowerCase());
+const SUPPORTED_CURRENCIES = config.supportedCurrencies;
 
-const DEFAULT_CURRENCY = (process.env.DEFAULT_CURRENCY || 'mxn').toLowerCase();
+const DEFAULT_CURRENCY = config.defaultCurrency;
 
 // Validate currency function
 const isValidCurrency = (currency) => {
@@ -283,7 +304,7 @@ const authenticateToken = (req, res, next) => {
     }
     const token = auth.slice(7)
     try {
-        const payload = jwt.verify(token, process.env.SESSION_SECRET)
+        const payload = jwt.verify(token, config.jwtSecret)
         // BUG #4 FIX: Validate that user ID is a positive integer, reject if missing
         const userId = payload && payload.id ? payload.id : payload?.sub || 0
 
@@ -300,14 +321,9 @@ const authenticateToken = (req, res, next) => {
 }
 
 // Stripe account based in Mexico, supports multi-currency payments via Stripe's built-in handling
-const stripeKey = process.env.STRIPE_SECRET_KEY
-const stripe = stripeKey ? new Stripe(stripeKey) : null
+const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey) : null
 
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-})
+cloudinary.config(config.cloudinary)
 
 const upload = multer({ storage: multer.memoryStorage() })
 const packsConfig = require('./shared/config/packs')
@@ -342,7 +358,7 @@ function startStatusPolling(jobId, type, a2eTaskId) {
                 return;
             }
 
-            const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+            const a2eService = new A2EService(config.a2e.apiKey, config.a2e.baseUrl)
             const status = await a2eService.getTaskStatus(type, a2eTaskId)
 
             if (!status || !status.data) {
@@ -545,7 +561,7 @@ app.post('/api/auth/signup', async (req, res) => {
         const userId = result.lastInsertRowid
 
         db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, 0)
-        const token = jwt.sign({ id: userId }, process.env.SESSION_SECRET, { expiresIn: '30d' })
+        const token = jwt.sign({ id: userId }, config.jwtSecret, { expiresIn: '30d' })
 
         res.status(201).json({ token, user: { id: userId, email } })
     } catch (e) {
@@ -565,7 +581,7 @@ app.post('/api/auth/login', async (req, res) => {
         const valid = await bcrypt.compare(password, user.password_hash)
         if (!valid) return res.status(401).json({ error: 'invalid_credentials' })
 
-        const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
+        const token = jwt.sign({ id: user.id }, config.jwtSecret, { expiresIn: '30d' })
         res.json({ token, user: { id: user.id, email: user.email } })
     } catch (e) {
         logger.error({ msg: 'login_error', error: String(e) })
@@ -600,7 +616,7 @@ app.post('/webhook/stripe', async (req, res) => {
     let event
 
     try {
-        event = stripe.webhooks.constructEvent(req.rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET)
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, config.stripeWebhookSecret)
     } catch (err) {
         return res.status(400).send(`Webhook Error: ${err.message}`)
     }
@@ -857,7 +873,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         const toolOptions = skuCatalog.getToolOptions(result.skuCodeToUse)
         const mergedOptions = { ...toolOptions, ...options }
 
-        const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+        const a2eService = new A2EService(config.a2e.apiKey, config.a2e.baseUrl)
         let a2eResponse
         try {
             a2eResponse = await a2eService.startTask(result.a2eToolType, mediaUrl, mergedOptions)
@@ -1124,10 +1140,9 @@ app.get('/api/account/plan', authenticateToken, (req, res) => {
 })
 
 const isAdmin = (req, res, next) => {
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim())
     const user = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id)
 
-    if (!user || !adminEmails.includes(user.email)) {
+    if (!user || !config.adminEmails.includes(user.email)) {
         return res.status(403).json({ error: 'admin_access_required' })
     }
 
@@ -1475,7 +1490,7 @@ app.get('/api/orders/:id', authenticateToken, (req, res) => {
     }
 })
 
-if (process.env.NODE_ENV === 'production') {
+if (config.nodeEnv === 'production') {
     const buildPath = path.join(__dirname, 'frontend/dist')
     logger.info('Starting production server with build path: ' + buildPath)
 
@@ -1498,5 +1513,5 @@ if (process.env.NODE_ENV === 'production') {
     }
 }
 
-const PORT = process.env.PORT || 3000
+const PORT = config.port
 app.listen(PORT, () => logger.info(`Server running on port ${PORT}`))

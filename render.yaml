@@ -4,8 +4,8 @@ services:
     env: node
     plan: free
     rootDir: FaceShot-ChopShop-web
-    buildCommand: "npm run build-all"
-    startCommand: "npm start"
+    buildCommand: "npm install && cd frontend && npm install && npm run build"
+    startCommand: "NODE_ENV=production node index.js"
     envVars:
       - key: PORT
         value: 10000

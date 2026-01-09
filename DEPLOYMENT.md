@@ -46,7 +46,7 @@ Before deploying:
 ```env
 # Required Variables
 NODE_ENV=production
-SESSION_SECRET=[your-32-character-random-string]
+JWT_SECRET=[your-32-character-random-string]
 A2E_API_KEY=[your-a2e-api-key]
 STRIPE_SECRET_KEY=[your-stripe-live-secret-key]
 STRIPE_WEBHOOK_SECRET=[your-stripe-webhook-secret]

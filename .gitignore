@@ -17,6 +17,10 @@ dist
 .env.test.local
 .env.production.local
 
+# Database files
+production.db
+*.db
+
 # Misc
 .DS_Store
 *.log

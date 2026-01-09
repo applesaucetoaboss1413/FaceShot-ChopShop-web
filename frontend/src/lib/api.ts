@@ -18,11 +18,9 @@ export function resolveCurrency(): string {
 
 const isDevelopment = import.meta.env.DEV;
 
-// In development, proxy through Vite or use localhost
-// In production, use relative URLs (same origin as Render deployment)
-const API_BASE_URL = isDevelopment
-  ? 'http://localhost:3000'
-  : '';
+// Use VITE_PUBLIC_URL if set (for cross-origin deployments)
+// Otherwise use relative URLs (same-origin or Vite proxy in dev)
+const API_BASE_URL = import.meta.env.VITE_PUBLIC_URL || '';
 
 let tokenUpdatePromise: Promise<void> | null = null;
 
@@ -297,7 +295,7 @@ interface BackendFlag {
   id: string | number;
   code: string;
   label: string;
-  priceMultiplier: number;
+  price_multiplier: number;
   price_add_flat_usd: string;
   price_add_flat_cents: number;
   description: string;
