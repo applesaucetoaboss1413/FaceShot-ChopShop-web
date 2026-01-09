@@ -51,12 +51,8 @@ export function detectUserCurrency(): CurrencyCode {
 
     // Try to detect from timezone
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (timezone.includes('Europe')) return 'EUR';
     if (timezone.includes('London')) return 'GBP';
-    if (timezone.includes('Tokyo')) return 'JPY';
-    if (timezone.includes('Kolkata') || timezone.includes('Mumbai')) return 'INR';
-    if (timezone.includes('Sydney') || timezone.includes('Melbourne')) return 'AUD';
-    if (timezone.includes('Toronto') || timezone.includes('Vancouver')) return 'CAD';
+    if (timezone.includes('Europe')) return 'EUR';
 
     return 'USD'; // Default to USD
   } catch (error) {
