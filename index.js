@@ -423,6 +423,7 @@ app.post('/webhook/stripe', async (req, res) => {
                 }
             } catch (e) {
                 logger.error({ msg: 'payment_db_error', error: String(e) })
+                return res.status(500).json({ error: 'database_error' })
             }
         }
     }

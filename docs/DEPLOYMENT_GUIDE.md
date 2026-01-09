@@ -23,7 +23,7 @@ FRONTEND_URL=https://your-domain.com
 
 # A2E API
 A2E_API_KEY=<your-a2e-api-key>
-A2E_BASE_URL=https://video.a2e.ai
+A2E_BASE_URL=https://api.a2e.ai
 
 # Cloudinary
 CLOUDINARY_CLOUD_NAME=<your-cloud-name>

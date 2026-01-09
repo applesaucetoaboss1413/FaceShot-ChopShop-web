@@ -154,6 +154,106 @@ interface CreateOrderPayload {
   flags: string[];
 }
 
+// Enhanced API Types
+interface SKUConfig {
+  id: number;
+  sku_code: string;
+  config_version: number;
+  active: number;
+  created_at: string;
+  updated_at: string;
+  steps: SKUToolStep[];
+  customer_options: CustomerOption[];
+}
+
+interface SKUToolStep {
+  id: number;
+  config_id: number;
+  step_order: number;
+  step_name: string;
+  a2e_endpoint: string | null;
+  http_method: string;
+  required: number;
+  condition_expression: any;
+  params_template: Record<string, any>;
+  timeout_seconds: number;
+  retry_enabled: number;
+  retry_max_attempts: number;
+  retry_backoff_ms: number;
+  created_at: string;
+}
+
+interface CustomerOption {
+  id: number;
+  config_id: number;
+  option_key: string;
+  option_label: string;
+  option_type: 'text' | 'number' | 'dropdown' | 'radio' | 'checkbox' | 'file' | 'textarea';
+  option_values: { value: string; label: string }[] | null;
+  default_value: string | null;
+  required: number;
+  validation_rules: {
+    min?: number;
+    max?: number;
+    minLength?: number;
+    maxLength?: number;
+    pattern?: string;
+    allowedTypes?: string[];
+    maxSize?: number;
+  } | null;
+  help_text: string | null;
+  display_order: number;
+  created_at: string;
+}
+
+interface AdvancedJob {
+  job_id: number;
+  order_id: number;
+  sku_code: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  customer_inputs: Record<string, any>;
+  total_steps: number;
+  completed_steps: number;
+  result_data: any;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface JobStep {
+  id: number;
+  job_id: number;
+  step_order: number;
+  step_name: string;
+  a2e_endpoint: string | null;
+  a2e_task_id: string | null;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped';
+  input_params: Record<string, any>;
+  output_data: any;
+  error_message: string | null;
+  retry_count: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+interface A2EAvatar {
+  avatar_id: string;
+  name: string;
+  preview_image_url: string;
+  gender: string;
+  age_range: string;
+}
+
+interface A2EVoice {
+  voice_id: string;
+  name: string;
+  language: string;
+  gender: string;
+  preview_url: string | null;
+  is_custom: boolean;
+}
+
 type BackendPlan = {
   id: unknown;
   code: unknown;
@@ -520,7 +620,120 @@ class ApiClient {
   async getStats(): Promise<ApiResponse<{ videos: number; paying_users: number; total_users: number }>> {
     return this.request<{ videos: number; paying_users: number; total_users: number }>('/stats');
   }
+
+  // Enhanced API - SKU Tool Configurations
+  async getSKUConfig(skuCode: string): Promise<ApiResponse<SKUConfig>> {
+    return this.request<SKUConfig>(`/api/skus/${skuCode}/config`);
+  }
+
+  async validateCustomerInputs(skuCode: string, inputs: Record<string, any>): Promise<ApiResponse<{ valid: boolean; errors: string[] }>> {
+    return this.request<{ valid: boolean; errors: string[] }>(`/api/skus/${skuCode}/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ inputs }),
+    });
+  }
+
+  // Enhanced API - Advanced Job Processing
+  async createAdvancedJob(skuCode: string, customerInputs: Record<string, any>): Promise<ApiResponse<AdvancedJob>> {
+    return this.request<AdvancedJob>('/api/jobs/create-advanced', {
+      method: 'POST',
+      body: JSON.stringify({ sku_code: skuCode, customer_inputs: customerInputs }),
+    });
+  }
+
+  async getAdvancedJobStatus(jobId: number): Promise<ApiResponse<AdvancedJob>> {
+    return this.request<AdvancedJob>(`/api/jobs/${jobId}/status`);
+  }
+
+  async getJobSteps(jobId: number): Promise<ApiResponse<{ steps: JobStep[] }>> {
+    return this.request<{ steps: JobStep[] }>(`/api/jobs/${jobId}/steps`);
+  }
+
+  // Enhanced API - Media Upload
+  async uploadMedia(file: File, type: string = 'general'): Promise<ApiResponse<{ url: string; cloudinary_id: string }>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+
+    const url = `${this.baseUrl}/api/upload/media`;
+    const headers: HeadersInit = {};
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || 'Upload failed',
+        };
+      }
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed',
+      };
+    }
+  }
+
+  // Enhanced API - A2E Resources
+  async getAvatars(): Promise<ApiResponse<{ avatars: A2EAvatar[] }>> {
+    return this.request<{ avatars: A2EAvatar[] }>('/api/a2e/avatars');
+  }
+
+  async getVoices(): Promise<ApiResponse<{ voices: A2EVoice[] }>> {
+    return this.request<{ voices: A2EVoice[] }>('/api/a2e/voices');
+  }
+
+  async getUserVoices(): Promise<ApiResponse<{ voices: A2EVoice[] }>> {
+    return this.request<{ voices: A2EVoice[] }>('/api/a2e/user-voices');
+  }
+
+  async getA2ECredits(): Promise<ApiResponse<{ balance: number }>> {
+    return this.request<{ balance: number }>('/api/a2e/credits');
+  }
+
+  // Enhanced API - Health & Monitoring
+  async getA2EHealth(): Promise<ApiResponse<{ status: string; response_time_ms: number }>> {
+    return this.request<{ status: string; response_time_ms: number }>('/api/health/a2e');
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);
-export type { User, Job, ProcessJobPayload, LoginPayload, SignupPayload, PricingPlan, SKU, PricingQuote, Flag, AccountPlan, Order, CreateOrderPayload, ApiResponse };
+export type {
+  User,
+  Job,
+  ProcessJobPayload,
+  LoginPayload,
+  SignupPayload,
+  PricingPlan,
+  SKU,
+  PricingQuote,
+  Flag,
+  AccountPlan,
+  Order,
+  CreateOrderPayload,
+  ApiResponse,
+  // Enhanced API Types
+  SKUConfig,
+  SKUToolStep,
+  CustomerOption,
+  AdvancedJob,
+  JobStep,
+  A2EAvatar,
+  A2EVoice
+};

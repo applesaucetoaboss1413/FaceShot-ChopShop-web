@@ -1,3 +1,5 @@
+const { getMonthPeriod } = require('./date-utils');
+
 class PricingEngine {
   constructor(db) {
     this.db = db;
@@ -10,7 +12,7 @@ class PricingEngine {
     if (!sku) throw new Error('sku_not_found');
 
     const userPlan = this.getUserActivePlan(userId);
-    
+
     let remainingSeconds = 0;
     if (userPlan) {
       const plan = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(userPlan.plan_id);
@@ -25,7 +27,7 @@ class PricingEngine {
     const defaultFlags = JSON.parse(sku.default_flags || '[]');
     const allFlags = [...new Set([...defaultFlags, ...appliedFlags])];
 
-    const flagRecords = allFlags.length > 0 
+    const flagRecords = allFlags.length > 0
       ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${allFlags.map(() => '?').join(',')}) AND active = 1`).all(...allFlags)
       : [];
 
@@ -106,8 +108,7 @@ class PricingEngine {
 
   getCurrentPeriodUsage(userId, planId) {
     const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    const { periodStart, periodEnd } = getMonthPeriod();
 
     let usage = this.db.prepare(`
       SELECT * FROM plan_usage 
@@ -131,11 +132,10 @@ class PricingEngine {
 
   deductUsage(userId, planId, seconds) {
     const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    const { periodStart, periodEnd } = getMonthPeriod();
 
     this.getCurrentPeriodUsage(userId, planId);
-    
+
     this.db.prepare(`
       UPDATE plan_usage 
       SET seconds_used = seconds_used + ?, updated_at = ?
