@@ -9,11 +9,13 @@ const cloudinary = require('cloudinary').v2
 const axios = require('axios')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcryptjs')
-const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
 
 dotenv.config()
+
+// MongoDB setup
+const dbHelper = require('./db-helper')
 
 const logger = winston.createLogger({
     level: 'info',
@@ -114,38 +116,12 @@ const authenticateToken = (req, res, next) => {
     }
 }
 
-const addCredits = (userId, amount) => {
-    const transaction = db.transaction(() => {
-        const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(userId)
-        const newBalance = (current ? current.balance : 0) + amount
-        
-        if (current) {
-            db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, userId)
-        } else {
-            db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, newBalance)
-        }
-        
-        return newBalance
-    })
-    
-    return transaction()
+const addCredits = async (userId, amount) => {
+    return await dbHelper.addCredits(userId, amount)
 }
 
-const deductCredits = (userId, amount) => {
-    const transaction = db.transaction(() => {
-        const current = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(userId)
-        
-        if (!current || current.balance < amount) {
-            throw new Error('insufficient_credits')
-        }
-        
-        const newBalance = current.balance - amount
-        db.prepare('UPDATE user_credits SET balance = ? WHERE user_id = ?').run(newBalance, userId)
-        
-        return newBalance
-    })
-    
-    return transaction()
+const deductCredits = async (userId, amount) => {
+    return await dbHelper.deductCredits(userId, amount)
 }
 
 app.post('/webhook/stripe', async (req, res) => {
@@ -164,15 +140,16 @@ app.post('/webhook/stripe', async (req, res) => {
 
         if (source === 'web' && user_id) {
             try {
-                db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)').run(
+                // Create purchase record in MongoDB
+                await dbHelper.createPurchase(
                     user_id, 
-                    pack_type, 
-                    Number(points), 
+                    session.id, 
                     session.amount_total, 
-                    new Date().toISOString()
+                    Number(points)
                 )
                 
-                addCredits(user_id, Number(points))
+                // Add credits to user
+                await addCredits(user_id, Number(points))
                 
                 logger.info({ msg: 'payment_success', user_id, points })
             } catch (e) {
@@ -197,15 +174,8 @@ cloudinary.config({
 
 const upload = multer({ storage: multer.memoryStorage() })
 
-const db = new Database(process.env.DB_PATH || 'production.db')
-db.exec(
-    `CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, telegram_user_id TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT, first_name TEXT, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
-   CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, a2e_task_id TEXT, result_url TEXT, error_message TEXT, cost_credits INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
-   CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
-   CREATE TABLE IF NOT EXISTS miniapp_creations (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT, status TEXT, url TEXT, created_at TEXT);`
-)
+// MongoDB will be initialized on server start
+// No need for CREATE TABLE statements
 
 const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
@@ -229,11 +199,10 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             if (currentStatus === 'completed' || currentStatus === 'success') {
                 const resultUrl = status.data.result_url || status.data.video_url || status.data.media_url || ''
                 
-                db.prepare(`
-                    UPDATE jobs 
-                    SET status='completed', result_url=?, updated_at=? 
-                    WHERE id=?
-                `).run(resultUrl, new Date().toISOString(), jobId)
+                await dbHelper.updateJob(jobId, {
+                    status: 'completed',
+                    result_url: resultUrl
+                })
                 
                 clearInterval(pollInterval)
                 pollingJobs.delete(jobId)
@@ -241,23 +210,22 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             } else if (currentStatus === 'failed' || currentStatus === 'error') {
                 const errorMessage = status.data.failed_message || status.data.error_message || 'Unknown error'
                 
-                const job = db.prepare('SELECT user_id, cost_credits FROM jobs WHERE id=?').get(jobId)
-                if (job && job.cost_credits > 0) {
-                    db.prepare('UPDATE user_credits SET balance = balance + ? WHERE user_id = ?').run(job.cost_credits, job.user_id)
+                const job = await dbHelper.getJob(jobId)
+                if (job && job.credits_used > 0) {
+                    await dbHelper.addCredits(job.user_id, job.credits_used)
                 }
                 
-                db.prepare(`
-                    UPDATE jobs 
-                    SET status='failed', error_message=?, updated_at=? 
-                    WHERE id=?
-                `).run(errorMessage, new Date().toISOString(), jobId)
+                await dbHelper.updateJob(jobId, {
+                    status: 'failed',
+                    error: errorMessage
+                })
                 
                 clearInterval(pollInterval)
                 pollingJobs.delete(jobId)
-                logger.error({ msg: 'job_failed', jobId, errorMessage })
+                logger.error({ msg: 'job_failed', jobId, error: errorMessage })
             }
-        } catch (error) {
-            logger.error({ msg: 'polling_error', jobId, error: String(error) })
+        } catch (err) {
+            logger.error({ msg: 'polling_error', jobId, error: err.message })
         }
     }, 10000)
     
@@ -276,13 +244,22 @@ app.get('/alive', (req, res) => {
     res.status(200).json({ status: 'alive' })
 })
 
-app.get('/stats', (req, res) => {
-    const videos = db.prepare("SELECT COUNT(*) AS c FROM jobs WHERE status='completed'").get().c + db.prepare("SELECT COUNT(*) AS c FROM miniapp_creations WHERE status='completed'").get().c
-    const payingUsers = db.prepare('SELECT COUNT(DISTINCT user_id) AS c FROM purchases').get().c
-    const totalUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c
-    const revenueCents = db.prepare('SELECT COALESCE(SUM(amount_cents),0) AS s FROM purchases').get().s
-    const conversionRate = totalUsers ? Math.round((payingUsers / totalUsers) * 100) : 0
-    res.json({ videos, paying_users: payingUsers, total_users: totalUsers, conversion_rate: conversionRate, revenue_cents: revenueCents })
+app.get('/stats', async (req, res) => {
+    try {
+        const stats = await dbHelper.getStats()
+        const totalUsers = stats.total_users || 0
+        // Note: paying_users and revenue would need purchases to be aggregated
+        res.json({ 
+            videos: stats.videos || 0, 
+            paying_users: 0, 
+            total_users: totalUsers, 
+            conversion_rate: 0, 
+            revenue_cents: 0 
+        })
+    } catch (e) {
+        logger.error({ msg: 'stats_error', error: String(e) })
+        res.status(500).json({ error: 'stats_fetch_failed' })
+    }
 })
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -301,27 +278,21 @@ app.post('/api/auth/signup', async (req, res) => {
             return res.status(400).json({ error: 'password_too_short' })
         }
         
-        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
+        const existing = await dbHelper.getUserByEmail(email)
         if (existing) {
             return res.status(409).json({ error: 'email_exists' })
         }
         
         const passwordHash = await bcrypt.hash(password, 10)
-        const result = db.prepare('INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)').run(
-            email, 
-            passwordHash, 
-            new Date().toISOString()
-        )
+        const user = await dbHelper.createUser(email, passwordHash)
         
-        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(result.lastInsertRowid, 0)
-        
-        const token = jwt.sign({ id: result.lastInsertRowid }, process.env.SESSION_SECRET, { expiresIn: '30d' })
+        const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
         
         res.status(201).json({
             token,
             user: {
-                id: result.lastInsertRowid,
-                email,
+                id: user.id,
+                email: user.email,
                 first_name: null
             }
         })
@@ -338,7 +309,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
         
-        const user = db.prepare('SELECT id, email, password_hash, first_name FROM users WHERE email = ?').get(email)
+        const user = await dbHelper.getUserByEmail(email)
         if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
@@ -364,9 +335,9 @@ app.post('/api/auth/login', async (req, res) => {
     }
 })
 
-app.get('/api/auth/me', authenticateToken, (req, res) => {
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
     try {
-        const user = db.prepare('SELECT id, email, first_name FROM users WHERE id = ?').get(req.user.id)
+        const user = await dbHelper.getUserById(req.user.id)
         if (!user) {
             return res.status(401).json({ error: 'unauthorized' })
         }
@@ -417,54 +388,20 @@ app.post('/api/web/checkout', authenticateToken, async (req, res) => {
     }
 })
 
-app.get('/api/web/credits', authenticateToken, (req, res) => {
-    const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
-    res.json({ balance: creditRow ? creditRow.balance : 0 })
+app.get('/api/web/credits', authenticateToken, async (req, res) => {
+    try {
+        const credits = await dbHelper.getCredits(req.user.id)
+        res.json({ balance: credits.balance })
+    } catch (e) {
+        logger.error({ msg: 'credits_error', error: String(e) })
+        res.status(500).json({ error: 'credits_fetch_failed' })
+    }
 })
 
-app.get('/api/web/creations', authenticateToken, (req, res) => {
+app.get('/api/web/creations', authenticateToken, async (req, res) => {
     try {
-        const creations = db.prepare(`
-            SELECT 
-                m.id,
-                m.user_id,
-                m.type,
-                m.url as upload_url,
-                m.created_at,
-                j.id as job_id,
-                j.status as job_status,
-                j.result_url,
-                j.cost_credits,
-                j.error_message
-            FROM miniapp_creations m
-            LEFT JOIN jobs j ON j.user_id = m.user_id 
-                AND j.type = m.type 
-                AND j.id = (
-                    SELECT MAX(id) FROM jobs 
-                    WHERE user_id = m.user_id 
-                    AND type = m.type 
-                    AND created_at >= m.created_at
-                )
-            WHERE m.user_id = ?
-            ORDER BY m.id DESC
-            LIMIT 20
-        `).all(req.user.id)
-        
-        const items = creations.map(c => ({
-            id: c.id,
-            user_id: c.user_id,
-            type: c.type,
-            status: c.job_status || 'uploaded',
-            url: c.result_url || c.upload_url,
-            upload_url: c.upload_url,
-            result_url: c.result_url,
-            job_id: c.job_id,
-            cost_credits: c.cost_credits || 0,
-            error_message: c.error_message,
-            created_at: c.created_at
-        }))
-        
-        res.json({ items })
+        const jobs = await dbHelper.getUserJobs(req.user.id, 20)
+        res.json({ items: jobs })
     } catch (e) {
         logger.error({ msg: 'creations_error', error: String(e) })
         res.status(500).json({ error: 'creations_fetch_failed', message: 'Failed to retrieve creations' })
@@ -481,8 +418,11 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
             const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
             url = uploaded.secure_url
         }
-        db.prepare('INSERT INTO miniapp_creations (user_id, type, status, url, created_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'uploaded', url, new Date().toISOString())
-        res.json({ status: 'uploaded', url })
+        
+        // Create job with source_url for the upload using MongoDB
+        const job = await dbHelper.createJob(req.user.id, type, url, { uploaded: true })
+        
+        res.json({ status: 'uploaded', url, job_id: job.id })
     } catch (e) {
         logger.error({ msg: 'upload_error', error: String(e) })
         res.status(500).json({ error: 'upload_failed' })
@@ -494,13 +434,21 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         const { type, options = {} } = req.body
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
         
-        const creditRow = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
-        if (!creditRow || creditRow.balance < 10) {
+        // Check credits using MongoDB
+        const creditData = await dbHelper.getCredits(req.user.id)
+        if (!creditData || creditData.balance < 10) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
         
-        const upload = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(req.user.id, type)
-        if (!upload || !upload.url) {
+        // Get the most recent uploaded job/creation for this type using MongoDB
+        const { Job } = require('./models')
+        const upload = await Job.findOne({ 
+            user_id: req.user.id, 
+            type: type,
+            source_url: { $exists: true, $ne: null }
+        }).sort({ created_at: -1 })
+        
+        if (!upload || !upload.source_url) {
             return res.status(400).json({ error: 'no_media_uploaded' })
         }
         
@@ -508,7 +456,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         
         let a2eResponse
         try {
-            a2eResponse = await a2eService.startTask(type, upload.url, options)
+            a2eResponse = await a2eService.startTask(type, upload.source_url, options)
         } catch (a2eError) {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
             return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
@@ -521,52 +469,39 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         const taskId = a2eResponse.data._id
         const costCredits = a2eResponse.data.coins || 10
         
-        const deductCredits = db.transaction((userId, amount) => {
-            const current = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(userId)
-            if (!current || current.balance < amount) {
-                throw new Error('insufficient_credits')
-            }
-            db.prepare('UPDATE user_credits SET balance = balance - ? WHERE user_id = ?').run(amount, userId)
-        })
-        
+        // Deduct credits using MongoDB
         try {
-            deductCredits(req.user.id, costCredits)
+            await dbHelper.deductCredits(req.user.id, costCredits)
         } catch (error) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
         
-        const job = db.prepare('INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, created_at, updated_at) VALUES (?,?,?,?,?,?,?)').run(
-            req.user.id, 
-            type, 
-            'processing', 
-            taskId, 
-            costCredits, 
-            new Date().toISOString(), 
-            new Date().toISOString()
-        )
+        // Update the job with a2e task info using MongoDB
+        await dbHelper.updateJob(upload._id.toString(), {
+            status: 'processing',
+            a2e_task_id: taskId,
+            credits_used: costCredits
+        })
         
-        startStatusPolling(job.lastInsertRowid, type, taskId)
+        // Start polling for this job
+        startStatusPolling(upload._id.toString(), type, taskId)
         
-        res.json({ job_id: job.lastInsertRowid, status: 'processing', estimated_credits: costCredits })
+        res.json({ job_id: upload._id.toString(), status: 'processing', estimated_credits: costCredits })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
         res.status(500).json({ error: 'process_failed' })
     }
 })
 
-app.get('/api/web/status', (req, res) => {
+app.get('/api/web/status', async (req, res) => {
     try {
         const id = req.query.id
         if (!id) {
             return res.status(400).json({ error: 'missing_id', message: 'Job ID is required' })
         }
         
-        const jobId = Number(id)
-        if (isNaN(jobId)) {
-            return res.status(400).json({ error: 'invalid_id', message: 'Job ID must be a number' })
-        }
-        
-        const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId)
+        // MongoDB uses string IDs (ObjectId)
+        const job = await dbHelper.getJob(id)
         if (!job) {
             return res.status(404).json({ error: 'not_found', message: 'Job not found' })
         }
@@ -575,8 +510,8 @@ app.get('/api/web/status', (req, res) => {
             job_id: job.id,
             status: job.status,
             result_url: job.result_url || null,
-            cost_credits: job.cost_credits || 0,
-            error_message: job.error_message || null,
+            cost_credits: job.credits_used || 0,
+            error_message: job.error || null,
             created_at: job.created_at,
             updated_at: job.updated_at
         })
@@ -609,6 +544,14 @@ if (process.env.NODE_ENV === 'production') {
     }
 }
 
-app.listen(port, () => {
-    logger.info({ msg: 'server_started', port })
-})
+// Initialize MongoDB and start server
+dbHelper.connect(process.env.MONGODB_URI)
+    .then(() => {
+        app.listen(port, () => {
+            logger.info({ msg: 'server_started', port, database: 'MongoDB Atlas' })
+        })
+    })
+    .catch((err) => {
+        logger.error({ msg: 'server_start_failed', error: err.message })
+        process.exit(1)
+    })

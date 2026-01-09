@@ -9,19 +9,25 @@ import { useToast } from '@/hooks/use-toast';
 
 const planFeatures: Record<string, string[]> = {
   starter: [
-    'Includes monthly minutes for image-to-video',
+    '10 minutes total video processing',
+    'Up to 60 seconds per video (SD quality)',
     'Fair usage limits',
     'Standard support',
+    'Example: 10x 60-second videos',
   ],
   pro: [
-    'More monthly minutes',
+    '50 minutes total video processing',
+    'Up to 120 seconds per video (HD quality)',
     'Priority processing',
     'Priority support',
+    'Example: 25x 120-second videos',
   ],
   agency: [
-    'Highest monthly minutes',
+    '167 minutes total video processing',
+    'Up to 300 seconds per video (4K quality)',
     'Best overage rates',
     'Dedicated support',
+    'Example: 33x 300-second videos',
   ],
 };
 

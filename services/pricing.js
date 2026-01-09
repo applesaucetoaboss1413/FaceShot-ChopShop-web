@@ -27,8 +27,23 @@ class PricingEngine {
     const defaultFlags = JSON.parse(sku.default_flags || '[]');
     const allFlags = [...new Set([...defaultFlags, ...appliedFlags])];
 
+<<<<<<< HEAD
     const flagRecords = allFlags.length > 0
       ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${allFlags.map(() => '?').join(',')}) AND active = 1`).all(...allFlags)
+=======
+    // BUG 6 FIX: Validate flag codes are alphanumeric before SQL execution
+    const validFlagPattern = /^[A-Za-z0-9_]+$/;
+    const validatedFlags = allFlags.filter(flag => {
+      if (!validFlagPattern.test(flag)) {
+        console.warn(`Invalid flag code rejected: ${flag}`);
+        return false;
+      }
+      return true;
+    });
+
+    const flagRecords = validatedFlags.length > 0 
+      ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${validatedFlags.map(() => '?').join(',')}) AND active = 1`).all(...validatedFlags)
+>>>>>>> 67af479e20362b45dc48b9d333788b92111f2678
       : [];
 
     let price = sku.base_price_cents * quantity;
@@ -106,15 +121,20 @@ class PricingEngine {
     `).get(userId, now, now);
   }
 
+  // BUG #1 FIX: Use shared date helper for consistent period calculations
   getCurrentPeriodUsage(userId, planId) {
     const now = new Date();
+<<<<<<< HEAD
     const { periodStart, periodEnd } = getMonthPeriod();
+=======
+    const { periodStart, periodEnd } = getMonthPeriod(now);
+>>>>>>> 67af479e20362b45dc48b9d333788b92111f2678
 
     let usage = this.db.prepare(`
-      SELECT * FROM plan_usage 
-      WHERE user_id = ? 
-        AND plan_id = ? 
-        AND period_start = ? 
+      SELECT * FROM plan_usage
+      WHERE user_id = ?
+        AND plan_id = ?
+        AND period_start = ?
         AND period_end = ?
     `).get(userId, planId, periodStart, periodEnd);
 
@@ -130,14 +150,24 @@ class PricingEngine {
     return usage;
   }
 
+  // BUG #1 FIX: Use shared date helper for consistent period calculations
   deductUsage(userId, planId, seconds) {
     const now = new Date();
+<<<<<<< HEAD
     const { periodStart, periodEnd } = getMonthPeriod();
 
     this.getCurrentPeriodUsage(userId, planId);
 
+=======
+    const { periodStart, periodEnd } = getMonthPeriod(now);
+
+    // Ensure usage record exists (this creates it if missing)
+    const usage = this.getCurrentPeriodUsage(userId, planId);
+    
+    // Now update the existing record
+>>>>>>> 67af479e20362b45dc48b9d333788b92111f2678
     this.db.prepare(`
-      UPDATE plan_usage 
+      UPDATE plan_usage
       SET seconds_used = seconds_used + ?, updated_at = ?
       WHERE user_id = ? AND plan_id = ? AND period_start = ? AND period_end = ?
     `).run(seconds, now.toISOString(), userId, planId, periodStart, periodEnd);

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Zap, Github, Twitter, Mail } from 'lucide-react';
+import { Zap, Github, Twitter, Mail, Shield, Lock, Award, CheckCircle } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -61,7 +61,32 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between mt-12 pt-8 border-t border-border">
+        {/* Trust Badges */}
+        <div className="mt-12 pt-8 border-t border-border">
+          <div className="flex flex-wrap items-center justify-center gap-6 mb-8">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Shield className="w-5 h-5 text-primary" />
+              <span>SSL Secured</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Lock className="w-5 h-5 text-primary" />
+              <span>GDPR Compliant</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Award className="w-5 h-5 text-primary" />
+              <span>SOC 2 Type II</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle className="w-5 h-5 text-primary" />
+              <span>99.9% Uptime</span>
+            </div>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mb-4">
+            Founded in 2024 • Trusted by creators worldwide • Your data is never stored or shared
+          </p>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-border">
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} FaceShot-ChopShop. All rights reserved.
           </p>

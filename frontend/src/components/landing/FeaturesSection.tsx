@@ -71,7 +71,8 @@ export function FeaturesSection() {
   const navigate = useNavigate();
 
   const handleNavigate = (id: string) => {
-    navigate(`/dashboard?feature=${id}`);
+    // Redirect to ChopShop instead of Dashboard for unified tool access
+    navigate(`/chopshop`);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, id: string) => {

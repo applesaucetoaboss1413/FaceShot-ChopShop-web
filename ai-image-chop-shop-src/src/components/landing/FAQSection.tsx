@@ -9,35 +9,38 @@ import {
 const faqs = [
   {
     question: 'What is FaceShot-ChopShop?',
-    answer: 'FaceShot-ChopShop is an AI-powered platform that allows you to transform your images with cutting-edge technology. You can swap faces between photos, generate unique avatars, and convert static images into animated videos.',
+    answer: 'FaceShot-ChopShop is a comprehensive AI-powered platform featuring 21 advanced tools designed for content creators, e-commerce businesses, and digital marketers. Transform your visual content with Face Swap technology, generate stunning AI Avatars in multiple styles, convert images to animated videos, and access a complete suite of creative tools. Our platform combines cutting-edge AI with an intuitive interface, making professional-quality content creation accessible to everyone.',
+    defaultOpen: true,
   },
   {
     question: 'How do credits work?',
-    answer: 'Credits are the currency you use to process images. Different transformations cost different amounts of credits. Face swaps typically use 1 credit, avatars use 2-5 credits depending on complexity, and video generation uses 5-10 credits. Credits never expire.',
+    answer: 'Credits are the flexible currency system that powers all FaceShot-ChopShop tools. Each tool consumes a different amount of credits based on its complexity: Face Swap costs 100 credits (~$0.50), Image-to-Video costs 500 credits (~$2.50), AI Avatar generation costs 150 credits (~$0.75), and other tools range from 50-300 credits. Credits never expire and can be used across any of our 21 tools. Purchase credits through subscription plans (best value for regular users) or one-time bundles (perfect for specific projects).',
+    defaultOpen: true,
   },
   {
     question: 'Is my data secure?',
-    answer: 'Absolutely. We use end-to-end encryption for all uploads, and your images are automatically deleted from our servers within 24 hours of processing. We never share, sell, or use your images for training purposes.',
+    answer: 'Your privacy and security are our top priorities. We use military-grade end-to-end encryption (AES-256) for all uploads and processing. Your images are automatically deleted from our servers within 24 hours of processing - no exceptions. We never store, share, sell, or use your images for AI training purposes. Our infrastructure is GDPR compliant, and we maintain SOC 2 Type II certification. All processing happens in secure, isolated environments with zero data retention policies.',
+    defaultOpen: true,
   },
   {
     question: 'What image formats are supported?',
-    answer: 'We support all common image formats including JPG, JPEG, PNG, WebP, and HEIC. For best results, we recommend high-resolution images (at least 512x512 pixels) with clear, front-facing subjects.',
+    answer: 'We support all major image formats including JPG, JPEG, PNG, WebP, HEIC, BMP, and TIFF. For optimal results, we recommend uploading high-resolution images (minimum 512x512 pixels, ideally 1024x1024 or higher) with clear, front-facing subjects. Maximum file size is 10MB per image. Our AI works best with well-lit photos that have clear facial features for face-related tools.',
   },
   {
     question: 'How long does processing take?',
-    answer: 'Most transformations complete in under 30 seconds. Complex operations like video generation may take 1-2 minutes. Pro and Enterprise users get priority processing for even faster results.',
+    answer: 'Processing times vary by tool complexity: Face Swap completes in 20-30 seconds, AI Avatar generation takes 45-60 seconds, Image-to-Video conversions require 2-5 minutes depending on output length, and other tools process in 15-90 seconds. Pro and Enterprise plan subscribers get priority queue access, reducing wait times by up to 50% during peak hours. You\'ll receive real-time progress updates and email notifications when your content is ready.',
   },
   {
     question: 'Can I use the results commercially?',
-    answer: 'Yes! All outputs generated through FaceShot-ChopShop are yours to use however you like, including for commercial purposes. However, please ensure you have the rights to use any source images.',
+    answer: 'Yes! All content generated through FaceShot-ChopShop comes with a full commercial usage license. You retain complete ownership and can use outputs for business purposes, social media, marketing campaigns, e-commerce products, client work, and more. However, you must have the legal rights to use any source images you upload. For enterprise clients requiring additional licensing guarantees, custom commercial licenses are available.',
   },
   {
     question: 'Do you offer refunds?',
-    answer: 'Yes, we offer a 7-day money-back guarantee on all credit purchases. If you\'re not satisfied for any reason, contact our support team for a full refund.',
+    answer: 'We stand behind our service with a 7-day money-back guarantee on all purchases. If you\'re not completely satisfied with FaceShot-ChopShop for any reason, contact our support team within 7 days of purchase for a full refund - no questions asked. This applies to both subscription plans and one-time credit bundles. Unused credits from refunded purchases will be deactivated.',
   },
   {
     question: 'Is there an API available?',
-    answer: 'Yes! Pro and Enterprise users have access to our REST API for integrating FaceShot-ChopShop into your own applications and workflows. Check our documentation for details.',
+    answer: 'Yes! Pro and Enterprise plan subscribers have full access to our robust REST API. Integrate FaceShot-ChopShop\'s powerful AI capabilities directly into your applications, workflows, and automation systems. Our API includes comprehensive documentation, code examples in multiple languages (Python, JavaScript, PHP, Ruby), webhook support, and dedicated rate limits. API access includes priority support and 99.9% uptime SLA.',
   },
 ];
 
@@ -83,7 +86,7 @@ export function FAQSection() {
           transition={{ delay: 0.3 }}
           className="max-w-3xl mx-auto"
         >
-          <Accordion type="single" collapsible className="space-y-4">
+          <Accordion type="multiple" defaultValue={['item-0', 'item-1', 'item-2']} className="space-y-4">
             {faqs.map((faq, index) => (
               <AccordionItem
                 key={index}
@@ -93,7 +96,7 @@ export function FAQSection() {
                 <AccordionTrigger className="text-left hover:no-underline py-5">
                   <span className="font-semibold">{faq.question}</span>
                 </AccordionTrigger>
-                <AccordionContent className="text-muted-foreground pb-5">
+                <AccordionContent className="text-muted-foreground pb-5 leading-relaxed">
                   {faq.answer}
                 </AccordionContent>
               </AccordionItem>

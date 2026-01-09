@@ -1,9 +1,13 @@
 /**
  * API Service Layer for FaceShot-ChopShop
- * 
- * Uses relative URLs in production so the frontend can communicate 
+ *
+ * Uses relative URLs in production so the frontend can communicate
  * with the Render backend at the same origin.
+ *
+ * BUG #5 FIX: Includes currency detection and sends with all API requests
  */
+
+import { getUserCurrency } from './currency';
 
 const isDevelopment = import.meta.env.DEV;
 
@@ -295,8 +299,12 @@ class ApiClient {
 
     const url = `${this.baseUrl}${endpoint}`;
 
+    // BUG #5 FIX: Include user's currency in all requests
+    const userCurrency = getUserCurrency();
+    
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'x-currency': userCurrency,
       ...options.headers,
     };
 
@@ -304,12 +312,25 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
+    // BUG #5 FIX: Add currency to body for POST/PUT requests
+    let body = options.body;
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      try {
+        const bodyObj = JSON.parse(body as string);
+        bodyObj.currency = bodyObj.currency || userCurrency;
+        body = JSON.stringify(bodyObj);
+      } catch {
+        // If body isn't JSON, leave it as is
+      }
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        body,
       });
-      console.log('[ApiClient] Response received', { endpoint, method, status: response.status });
+      console.log('[ApiClient] Response received', { endpoint, method, status: response.status, currency: userCurrency });
       const data = await response.json();
 
       if (!response.ok) {
@@ -621,6 +642,7 @@ class ApiClient {
     return this.request<{ videos: number; paying_users: number; total_users: number }>('/stats');
   }
 
+<<<<<<< HEAD
   // Enhanced API - SKU Tool Configurations
   async getSKUConfig(skuCode: string): Promise<ApiResponse<SKUConfig>> {
     return this.request<SKUConfig>(`/api/skus/${skuCode}/config`);
@@ -710,6 +732,11 @@ class ApiClient {
   // Enhanced API - Health & Monitoring
   async getA2EHealth(): Promise<ApiResponse<{ status: string; response_time_ms: number }>> {
     return this.request<{ status: string; response_time_ms: number }>('/api/health/a2e');
+=======
+  // Catalog - Get all tools organized by category
+  async getCatalog(): Promise<ApiResponse<any>> {
+    return this.request<any>('/api/web/catalog');
+>>>>>>> 67af479e20362b45dc48b9d333788b92111f2678
   }
 }
 

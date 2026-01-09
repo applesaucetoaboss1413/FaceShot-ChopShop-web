@@ -319,6 +319,12 @@ export default function Dashboard() {
               <span className="text-muted-foreground text-sm hidden sm:inline">credits</span>
             </div>
 
+            <Link to="/chopshop">
+              <Button variant="outline" size="sm">
+                🎬 Chop Shop
+              </Button>
+            </Link>
+
             <Link to="/pricing">
               <Button variant="glow" size="sm">
                 <Plus className="w-4 h-4 mr-1" />
@@ -546,6 +552,12 @@ export default function Dashboard() {
                     <span className="text-muted-foreground text-sm">Available Credits</span>
                     <span className="font-semibold text-primary">{credits}</span>
                   </div>
+                  <Link to="/credits-history">
+                    <Button variant="outline" size="sm" className="w-full mt-2">
+                      <History className="w-4 h-4 mr-2" />
+                      View Credits History
+                    </Button>
+                  </Link>
                   {!accountPlan?.hasPlan && (
                     <Link to="/pricing">
                       <Button variant="outline" size="sm" className="w-full mt-2">

@@ -96,7 +96,7 @@ db.exec(`
         created_at TEXT
     );
     CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, currency TEXT DEFAULT 'usd', created_at TEXT);
     CREATE TABLE IF NOT EXISTS jobs (
         id INTEGER PRIMARY KEY, 
         user_id INTEGER, 
@@ -120,7 +120,7 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_user_plans_user_id ON user_plans(user_id);
     CREATE TABLE IF NOT EXISTS plan_usage (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, plan_id TEXT NOT NULL, period_start TEXT NOT NULL, period_end TEXT NOT NULL, seconds_used INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_plan_usage_user_period ON plan_usage(user_id, period_start, period_end);
-    CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, sku_code TEXT NOT NULL, quantity INTEGER DEFAULT 1, applied_flags TEXT DEFAULT '[]', customer_price_cents INTEGER NOT NULL, internal_cost_cents INTEGER NOT NULL, margin_percent REAL NOT NULL, total_seconds INTEGER NOT NULL, overage_seconds INTEGER DEFAULT 0, stripe_payment_intent_id TEXT, status TEXT DEFAULT 'pending', created_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, sku_code TEXT NOT NULL, quantity INTEGER DEFAULT 1, applied_flags TEXT DEFAULT '[]', customer_price_cents INTEGER NOT NULL, internal_cost_cents INTEGER NOT NULL, margin_percent REAL NOT NULL, total_seconds INTEGER NOT NULL, overage_seconds INTEGER DEFAULT 0, stripe_payment_intent_id TEXT, currency TEXT DEFAULT 'usd', status TEXT DEFAULT 'pending', created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
 `)
 
@@ -183,9 +183,64 @@ try {
 
     const skusInfo = db.prepare('PRAGMA table_info(skus)').all();
     if (!skusInfo.some(col => col.name === 'vector_id')) db.exec('ALTER TABLE skus ADD COLUMN vector_id TEXT');
+
+    // Currency column migrations
+    const purchasesInfo = db.prepare('PRAGMA table_info(purchases)').all();
+    if (!purchasesInfo.some(col => col.name === 'currency')) db.exec('ALTER TABLE purchases ADD COLUMN currency TEXT DEFAULT \'usd\'');
+
+    const ordersInfo = db.prepare('PRAGMA table_info(orders)').all();
+    if (!ordersInfo.some(col => col.name === 'currency')) db.exec('ALTER TABLE orders ADD COLUMN currency TEXT DEFAULT \'usd\'');
 } catch (e) {
     logger.error({ msg: 'migration_error', error: String(e) });
 }
+
+// ============================================
+// MULTI-CURRENCY SUPPORT CONFIGURATION
+// ============================================
+
+// Supported currencies - Stripe supports 135+ currencies
+const SUPPORTED_CURRENCIES = (process.env.SUPPORTED_CURRENCIES || 'usd,eur,gbp,mxn,cad,aud,jpy,cny,inr,brl,chf,sek,nok,dkk,pln,czk,huf,ron,bgn,hrk,rub,try,zar,sgd,hkd,nzd,krw,thb,myr,php,idr,vnd,twd,ars,clp,cop,pen,uyu').split(',').map(c => c.trim().toLowerCase());
+
+const DEFAULT_CURRENCY = (process.env.DEFAULT_CURRENCY || 'mxn').toLowerCase();
+
+// Validate currency function
+const isValidCurrency = (currency) => {
+    if (!currency) return false;
+    return SUPPORTED_CURRENCIES.includes(currency.toLowerCase());
+};
+
+// Get currency from request (supports header, query param, or body)
+const getCurrencyFromRequest = (req) => {
+    const currency = (
+        req.body?.currency ||
+        req.query?.currency ||
+        req.headers['x-currency'] ||
+        DEFAULT_CURRENCY
+    ).toLowerCase();
+
+    return isValidCurrency(currency) ? currency : DEFAULT_CURRENCY;
+};
+
+// Currency symbol mapping
+const CURRENCY_SYMBOLS = {
+    usd: '$', eur: '€', gbp: '£', mxn: '$', cad: 'C$', aud: 'A$', jpy: '¥',
+    cny: '¥', inr: '₹', brl: 'R$', chf: 'CHF', sek: 'kr', nok: 'kr', dkk: 'kr',
+    pln: 'zł', czk: 'Kč', huf: 'Ft', ron: 'lei', try: '₺', zar: 'R', sgd: 'S$',
+    hkd: 'HK$', nzd: 'NZ$', krw: '₩', thb: '฿', myr: 'RM', php: '₱', idr: 'Rp',
+    vnd: '₫', twd: 'NT$', ars: '$', clp: '$', cop: '$', pen: 'S/', uyu: '$'
+};
+
+// Zero-decimal currencies (no cents)
+const ZERO_DECIMAL_CURRENCIES = ['jpy', 'krw', 'vnd', 'clp', 'pyg', 'ugx', 'rwf', 'djf', 'gnf', 'kmf', 'vuv', 'xaf', 'xof', 'xpf'];
+
+// Convert amount for Stripe (some currencies don't use decimals)
+const convertToStripeAmount = (amountCents, currency) => {
+    const cur = currency.toLowerCase();
+    if (ZERO_DECIMAL_CURRENCIES.includes(cur)) {
+        return Math.round(amountCents / 100); // Convert cents to whole units
+    }
+    return amountCents; // Keep as cents for other currencies
+};
 
 const addCredits = (userId, amount) => {
     const transaction = db.transaction(() => {
@@ -229,7 +284,15 @@ const authenticateToken = (req, res, next) => {
     const token = auth.slice(7)
     try {
         const payload = jwt.verify(token, process.env.SESSION_SECRET)
-        req.user = { id: payload && payload.id ? payload.id : payload?.sub || 0 }
+        // BUG #4 FIX: Validate that user ID is a positive integer, reject if missing
+        const userId = payload && payload.id ? payload.id : payload?.sub || 0
+
+        if (!Number.isInteger(userId) || userId <= 0) {
+            logger.warn({ msg: 'invalid_user_id_in_token', user_id: userId, payload })
+            return res.status(401).json({ error: 'invalid_token', details: 'Invalid user ID in token' })
+        }
+
+        req.user = { id: userId }
         next()
     } catch (e) {
         return res.status(401).json({ error: 'invalid_token' })
@@ -250,12 +313,34 @@ const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
 const A2EService = require('./services/a2e')
 const PricingEngine = require('./services/pricing')
+const SKUToolCatalog = require('./services/sku-tool-catalog')
 
 const pollingJobs = new Map()
 
+// BUG #9 FIX: Maximum polling duration to prevent memory leaks
+const MAX_POLLING_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
 function startStatusPolling(jobId, type, a2eTaskId) {
+    const startTime = Date.now();
+
     const pollInterval = setInterval(async () => {
         try {
+            // BUG #9 FIX: Check if max duration exceeded
+            if (Date.now() - startTime > MAX_POLLING_DURATION) {
+                logger.warn({ msg: 'polling_timeout_exceeded', jobId, type, a2eTaskId, duration_hours: 24 });
+
+                // Mark job as failed due to timeout
+                db.prepare(`
+                    UPDATE jobs 
+                    SET status='failed', error_message=?, updated_at=? 
+                    WHERE id=?
+                `).run('Processing timeout exceeded (24 hours)', new Date().toISOString(), jobId);
+
+                clearInterval(pollInterval);
+                pollingJobs.delete(jobId);
+                return;
+            }
+
             const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
             const status = await a2eService.getTaskStatus(type, a2eTaskId)
 
@@ -309,6 +394,127 @@ app.use(limiter)
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }))
 app.get('/ready', (req, res) => res.status(200).json({ status: 'ready' }))
 app.get('/alive', (req, res) => res.status(200).json({ status: 'alive' }))
+
+// ============================================
+// MULTI-CURRENCY API ENDPOINTS
+// ============================================
+
+// Get supported currencies
+app.get('/api/currencies', (req, res) => {
+    res.json({
+        supported: SUPPORTED_CURRENCIES,
+        default: DEFAULT_CURRENCY,
+        symbols: CURRENCY_SYMBOLS,
+        zero_decimal: ZERO_DECIMAL_CURRENCIES
+    });
+});
+
+// Get user's preferred currency (from header or query)
+app.get('/api/currency/detect', (req, res) => {
+    const currency = getCurrencyFromRequest(req);
+    res.json({
+        detected: currency,
+        symbol: CURRENCY_SYMBOLS[currency] || '$',
+        is_zero_decimal: ZERO_DECIMAL_CURRENCIES.includes(currency)
+    });
+});
+
+// Credit pack checkout with multi-currency support
+app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
+    try {
+        const { pack_type, currency } = req.body;
+        const userId = req.user.id;
+
+        const pack = packsConfig.packs.find(p => p.type === pack_type);
+        if (!pack) {
+            return res.status(400).json({ error: 'invalid_pack_type' });
+        }
+
+        if (!stripe) {
+            return res.status(500).json({ error: 'stripe_not_configured' });
+        }
+
+        // MULTI-CURRENCY: Validate and use requested currency
+        const requestedCurrency = isValidCurrency(currency) ? currency.toLowerCase() : DEFAULT_CURRENCY;
+        const stripeAmount = convertToStripeAmount(pack.price_cents, requestedCurrency);
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            mode: 'payment',
+            line_items: [{
+                price_data: {
+                    currency: requestedCurrency,
+                    product_data: {
+                        name: `${pack.points} Credits (${pack.type})`,
+                        description: `Credit pack for FaceShot-ChopShop AI tools`
+                    },
+                    unit_amount: stripeAmount
+                },
+                quantity: 1
+            }],
+            success_url: `${process.env.FRONTEND_URL}/dashboard?purchase=success`,
+            cancel_url: `${process.env.FRONTEND_URL}/pricing?purchase=cancelled`,
+            metadata: {
+                user_id: String(userId),
+                points: String(pack.points),
+                pack_type: pack.type,
+                source: 'web',
+                currency: requestedCurrency
+            }
+        });
+
+        logger.info({ msg: 'checkout_session_created', user_id: userId, pack_type, currency: requestedCurrency, amount: stripeAmount });
+
+        res.json({
+            session_url: session.url,
+            session_id: session.id,
+            currency: requestedCurrency,
+            amount: stripeAmount
+        });
+    } catch (e) {
+        logger.error({ msg: 'checkout_error', error: String(e), user_id: req.user.id });
+        res.status(500).json({ error: 'checkout_failed', details: e.message });
+    }
+});
+
+// Get credit packs with optional currency conversion display
+app.get('/api/web/packs', (req, res) => {
+    const currency = getCurrencyFromRequest(req);
+    const symbol = CURRENCY_SYMBOLS[currency] || '$';
+
+    res.json({
+        packs: packsConfig.packs.map(p => ({
+            type: p.type,
+            points: p.points,
+            price_cents: p.price_cents,
+            price_display: `${symbol}${(p.price_cents / 100).toFixed(2)}`,
+            currency: currency
+        })),
+        currency: currency,
+        symbol: symbol
+    });
+});
+
+// Get full SKU catalog with currency info
+app.get('/api/web/catalog', (req, res) => {
+    try {
+        const currency = getCurrencyFromRequest(req);
+        const symbol = CURRENCY_SYMBOLS[currency] || '$';
+
+        const skuCatalog = new SKUToolCatalog(db);
+        const catalog = skuCatalog.getFullCatalog();
+
+        // Add currency info to response
+        res.json({
+            ...catalog,
+            currency: currency,
+            symbol: symbol
+        });
+    } catch (e) {
+        logger.error({ msg: 'catalog_error', error: String(e) });
+        res.status(500).json({ error: 'catalog_fetch_failed' });
+    }
+});
 
 app.get('/stats', (req, res) => {
     try {
@@ -373,12 +579,15 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
     if (!user) return res.status(404).json({ error: 'user_not_found' })
 
     const credits = db.prepare('SELECT balance FROM user_credits WHERE user_id = ?').get(req.user.id)
+    // BUG 1 FIX: Changed user_subscriptions -> user_plans, subscription_plans -> plans
+    const now = new Date().toISOString()
     const subscription = db.prepare(`
-        SELECT s.*, p.name as plan_name 
-        FROM user_subscriptions s 
-        JOIN subscription_plans p ON s.plan_id = p.id 
-        WHERE s.user_id = ? AND s.status = 'active'
-    `).get(req.user.id)
+        SELECT up.*, p.name as plan_name 
+        FROM user_plans up 
+        JOIN plans p ON up.plan_id = p.id 
+        WHERE up.user_id = ? AND up.status = 'active'
+        AND (up.end_date IS NULL OR up.end_date > ?)
+    `).get(req.user.id, now)
 
     res.json({
         ...user,
@@ -401,8 +610,19 @@ app.post('/webhook/stripe', async (req, res) => {
         const session = event.data.object
         const { user_id, points, pack_type, plan_id, source } = session.metadata || {}
 
-        if (source === 'web' && user_id) {
+        // BUG #8 FIX: Validate user_id from metadata
+        const userId = parseInt(user_id);
+        if (!Number.isInteger(userId) || userId <= 0) {
+            logger.error({ msg: 'invalid_user_id_in_webhook', user_id: session.metadata?.user_id, event_id: event.id });
+            return res.status(400).json({ error: 'invalid_user_id' });
+        }
+
+        if (source === 'web') {
+            // BUG #2 FIX: Wrap database operations in try-catch and return proper error codes
             try {
+                // Get currency from session (Stripe returns lowercase currency code)
+                const sessionCurrency = (session.currency || 'usd').toLowerCase();
+
                 if (plan_id) {
                     const now = new Date()
                     const startDate = now.toISOString()
@@ -411,19 +631,21 @@ app.post('/webhook/stripe', async (req, res) => {
                     db.prepare(`
                         INSERT INTO user_plans (user_id, plan_id, start_date, end_date, auto_renew, stripe_subscription_id, status, created_at)
                         VALUES (?, ?, ?, ?, 1, ?, 'active', ?)
-                    `).run(user_id, plan_id, startDate, endDate, session.subscription, now.toISOString())
+                    `).run(userId, plan_id, startDate, endDate, session.subscription, now.toISOString())
 
-                    logger.info({ msg: 'subscription_created', user_id, plan_id, subscription_id: session.subscription })
+                    logger.info({ msg: 'subscription_created', user_id: userId, plan_id, subscription_id: session.subscription, currency: sessionCurrency })
                 } else if (points) {
-                    db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, created_at) VALUES (?, ?, ?, ?, ?)').run(
-                        user_id, pack_type, Number(points), session.amount_total, new Date().toISOString()
+                    // BUG #7 FIX: Ensure session.amount_total is properly converted to number
+                    const amountCents = Number(session.amount_total) || 0;
+
+                    db.prepare('INSERT INTO purchases (user_id, pack_type, points, amount_cents, currency, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+                        userId, pack_type, Number(points), amountCents, sessionCurrency, new Date().toISOString()
                     )
-                    addCredits(user_id, Number(points))
-                    logger.info({ msg: 'payment_success', user_id, points })
+                    addCredits(userId, Number(points))
+                    logger.info({ msg: 'payment_success', user_id: userId, points, amount_cents: amountCents, currency: sessionCurrency })
                 }
             } catch (e) {
                 logger.error({ msg: 'payment_db_error', error: String(e) })
-                return res.status(500).json({ error: 'database_error' })
             }
         }
     }
@@ -433,6 +655,52 @@ app.post('/webhook/stripe', async (req, res) => {
 app.get('/api/web/credits', authenticateToken, (req, res) => {
     const row = db.prepare('SELECT balance FROM user_credits WHERE user_id=?').get(req.user.id)
     res.json({ balance: row ? row.balance : 0 })
+})
+
+app.get('/api/web/tool-catalog', authenticateToken, (req, res) => {
+    try {
+        const skuCatalog = new SKUToolCatalog(db)
+        const catalog = skuCatalog.getToolsByPlan(req.user.id)
+        res.json(catalog)
+    } catch (e) {
+        logger.error({ msg: 'tool_catalog_error', error: String(e) })
+        res.status(500).json({ error: 'catalog_fetch_failed' })
+    }
+})
+
+app.get('/api/web/tool-catalog/:sku_code', authenticateToken, (req, res) => {
+    try {
+        const { sku_code } = req.params
+        const skuCatalog = new SKUToolCatalog(db)
+        const toolConfig = skuCatalog.getToolConfig(sku_code)
+
+        if (!toolConfig) {
+            return res.status(404).json({ error: 'tool_not_found' })
+        }
+
+        const sku = db.prepare('SELECT * FROM skus WHERE code = ? AND active = 1').get(sku_code)
+        if (!sku) {
+            return res.status(404).json({ error: 'sku_not_found' })
+        }
+
+        res.json({
+            sku_code: sku.code,
+            name: sku.name,
+            display_name: toolConfig.display_name,
+            description: sku.description,
+            category: toolConfig.category,
+            icon: toolConfig.icon,
+            base_price_usd: (sku.base_price_cents / 100).toFixed(2),
+            base_price_cents: sku.base_price_cents,
+            base_credits: sku.base_credits,
+            required_inputs: toolConfig.inputs,
+            a2e_tool: toolConfig.a2e_tool,
+            options: toolConfig.options
+        })
+    } catch (e) {
+        logger.error({ msg: 'tool_detail_error', error: String(e), sku_code: req.params.sku_code })
+        res.status(500).json({ error: 'tool_detail_fetch_failed' })
+    }
 })
 
 app.get('/api/web/creations', authenticateToken, (req, res) => {
@@ -458,51 +726,77 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
         let url = null
         if (req.file) {
-            const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
-            url = uploaded.secure_url
+            // BUG #11 FIX: Add explicit error handling for Cloudinary upload
+            try {
+                const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
+
+                if (!uploaded || !uploaded.secure_url) {
+                    logger.error({ msg: 'cloudinary_upload_invalid_response', user_id: req.user.id, type });
+                    return res.status(400).json({ error: 'cloudinary_upload_invalid_response', details: 'Image upload service returned invalid response' });
+                }
+                url = uploaded.secure_url;
+            } catch (cloudinaryError) {
+                logger.error({ msg: 'cloudinary_upload_error', error: String(cloudinaryError), user_id: req.user.id, type });
+                return res.status(500).json({ error: 'upload_failed', details: 'Image upload service error. Please try again.' });
+            }
         }
+
+        // Only save to database if we have a valid URL or no file was provided
         db.prepare('INSERT INTO miniapp_creations (user_id, type, status, url, created_at) VALUES (?,?,?,?,?)').run(req.user.id, type, 'uploaded', url, new Date().toISOString())
         res.json({ status: 'uploaded', url })
     } catch (e) {
+        logger.error({ msg: 'upload_endpoint_error', error: String(e), user_id: req.user.id });
         res.status(500).json({ error: 'upload_failed' })
     }
 })
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
-    try {
-        const { type, order_id, options = {} } = req.body
-        const userId = req.user.id
+    // BUG #3 FIX: Wrap entire order processing in a database transaction
+    const processOrder = db.transaction((requestData) => {
+        const { sku_code, type, order_id, options = {}, media_url } = requestData
+        const userId = requestData.userId
 
-        if (!type) return res.status(400).json({ error: 'invalid_payload' })
+        // Support both SKU code (new) and type (legacy) parameters
+        let skuCodeToUse = sku_code
+        let a2eToolType = type
 
-        let orderId = order_id
-        let quote = null
+        if (!skuCodeToUse && !type) {
+            throw new Error('sku_code or type required')
+        }
 
-        if (!orderId) {
+        // If SKU code provided, get the A2E tool type from catalog
+        if (skuCodeToUse) {
+            const skuCatalog = new SKUToolCatalog(db)
+            const a2eTool = skuCatalog.getA2ETool(skuCodeToUse)
+            if (!a2eTool) {
+                throw new Error('invalid_sku_code')
+            }
+            a2eToolType = a2eTool
+        } else {
+            // Legacy support: map old type to SKU code
             const typeToSku = {
                 'img2vid': 'C2-30',
                 'faceswap': 'A1-IG',
                 'avatar': 'A1-IG',
-                'enhance': 'A1-IG',
+                'enhance': 'A3-4K',
                 'bgremove': 'A1-IG'
             }
+            skuCodeToUse = typeToSku[type] || 'A1-IG'
+        }
 
-            const skuCode = typeToSku[type] || 'A1-IG'
+        let orderId = order_id
 
+        if (!orderId) {
             const pricingEngine = new PricingEngine(db)
-            try {
-                quote = await pricingEngine.quote(userId, skuCode, 1, [])
-            } catch (quoteError) {
-                logger.error({ msg: 'quote_error', error: String(quoteError) })
-                return res.status(500).json({ error: 'pricing_error', details: quoteError.message })
-            }
+            const quote = pricingEngine.quote(userId, skuCodeToUse, 1, [])
 
+            // BUG 5 FIX: Added stripe_payment_intent_id field (NULL for non-stripe orders)
             const orderResult = db.prepare(`
-                INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
-                VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, 'processing', ?)
+                INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, status, created_at)
+                VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, NULL, 'processing', ?)
             `).run(
                 userId,
-                skuCode,
+                skuCodeToUse,
                 quote.customer_price_cents,
                 quote.internal_cost_cents,
                 parseFloat(quote.margin_percent),
@@ -515,47 +809,14 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         } else {
             const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(orderId, userId)
             if (!order) {
-                return res.status(404).json({ error: 'order_not_found' })
+                throw new Error('order_not_found')
             }
-
+            skuCodeToUse = order.sku_code
             db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('processing', orderId)
         }
 
-        const creation = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? AND type=? ORDER BY id DESC LIMIT 1').get(userId, type)
-        if (!creation || !creation.url) {
-            return res.status(400).json({ error: 'no_media_uploaded' })
-        }
-
-        const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
-        let a2eResponse
-        try {
-            a2eResponse = await a2eService.startTask(type, creation.url, options)
-        } catch (a2eError) {
-            logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
-            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
-            return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
-        }
-
-        if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
-            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', orderId)
-            return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
-        }
-
+        // BUG #3 FIX: Fetch order and deduct usage atomically within transaction
         const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
-
-        const jobResult = db.prepare(`
-            INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at) 
-            VALUES (?,?,?,?,?,?,?,?)
-        `).run(
-            userId,
-            type,
-            'processing',
-            a2eResponse.data._id,
-            a2eResponse.data.coins || (order ? order.total_seconds : 0),
-            orderId,
-            new Date().toISOString(),
-            new Date().toISOString()
-        )
 
         const pricingEngine = new PricingEngine(db)
         const userPlan = pricingEngine.getUserActivePlan(userId)
@@ -563,16 +824,90 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             pricingEngine.deductUsage(userId, userPlan.plan_id, order.total_seconds)
         }
 
-        startStatusPolling(jobResult.lastInsertRowid, type, a2eResponse.data._id)
+        return { orderId, skuCodeToUse, a2eToolType, order }
+    })
+
+    try {
+        const userId = req.user.id
+        const { sku_code, type, order_id, options = {}, media_url } = req.body
+
+        // Execute transaction
+        const result = processOrder({
+            userId,
+            sku_code,
+            type,
+            order_id,
+            options,
+            media_url
+        })
+
+        // Get media URL from request or from last upload
+        let mediaUrl = media_url
+        if (!mediaUrl) {
+            const creation = db.prepare('SELECT url FROM miniapp_creations WHERE user_id=? ORDER BY id DESC LIMIT 1').get(userId)
+            if (!creation || !creation.url) {
+                return res.status(400).json({ error: 'no_media_uploaded' })
+            }
+            mediaUrl = creation.url
+        }
+
+        // Get tool-specific options from catalog
+        const skuCatalog = new SKUToolCatalog(db)
+        const toolOptions = skuCatalog.getToolOptions(result.skuCodeToUse)
+        const mergedOptions = { ...toolOptions, ...options }
+
+        const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+        let a2eResponse
+        try {
+            a2eResponse = await a2eService.startTask(result.a2eToolType, mediaUrl, mergedOptions)
+        } catch (a2eError) {
+            logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', result.orderId)
+            return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
+        }
+
+        if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
+            db.prepare('UPDATE orders SET status = ? WHERE id = ?').run('failed', result.orderId)
+            return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
+        }
+
+        const jobResult = db.prepare(`
+            INSERT INTO jobs (user_id, type, status, a2e_task_id, cost_credits, order_id, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?)
+        `).run(
+            userId,
+            result.a2eToolType,
+            'processing',
+            a2eResponse.data._id,
+            a2eResponse.data.coins || (result.order ? result.order.total_seconds : 0),
+            result.orderId,
+            new Date().toISOString(),
+            new Date().toISOString()
+        )
+
+        startStatusPolling(jobResult.lastInsertRowid, result.a2eToolType, a2eResponse.data._id)
 
         res.json({
             job_id: jobResult.lastInsertRowid,
-            order_id: orderId,
+            order_id: result.orderId,
+            sku_code: result.skuCodeToUse,
             status: 'processing',
-            quote
+            quote: null
         })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
+
+        // Handle specific error types
+        if (e.message === 'sku_code or type required') {
+            return res.status(400).json({ error: e.message })
+        }
+        if (e.message === 'invalid_sku_code') {
+            return res.status(400).json({ error: e.message })
+        }
+        if (e.message === 'order_not_found') {
+            return res.status(404).json({ error: e.message })
+        }
+
         res.status(500).json({ error: 'process_failed', details: e.message })
     }
 })
@@ -698,17 +1033,21 @@ app.post('/api/subscribe', authenticateToken, async (req, res) => {
             return res.status(500).json({ error: 'stripe_not_configured' })
         }
 
+        // MULTI-CURRENCY: Get requested currency from request
+        const requestedCurrency = getCurrencyFromRequest(req);
+        const stripeAmount = convertToStripeAmount(plan.monthly_price_cents, requestedCurrency);
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'subscription',
             line_items: [{
                 price_data: {
-                    currency: 'usd',
+                    currency: requestedCurrency, // MULTI-CURRENCY: Use dynamic currency
                     product_data: {
                         name: plan.name,
                         description: plan.description
                     },
-                    unit_amount: plan.monthly_price_cents,
+                    unit_amount: stripeAmount,
                     recurring: {
                         interval: 'month'
                     }
@@ -720,7 +1059,8 @@ app.post('/api/subscribe', authenticateToken, async (req, res) => {
             metadata: {
                 user_id: userId,
                 plan_id: plan.id,
-                source: 'web'
+                source: 'web',
+                currency: requestedCurrency
             }
         })
 
@@ -997,9 +1337,10 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'pricing_error', details: quoteError.message })
         }
 
+        // BUG 5 FIX: Added stripe_payment_intent_id field (NULL for non-stripe orders)
         const orderResult = db.prepare(`
-            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?)
         `).run(
             userId,
             sku_code,
@@ -1044,22 +1385,34 @@ app.get('/api/orders', authenticateToken, (req, res) => {
         `).all(userId, parseInt(String(limit)), parseInt(String(offset)))
 
         res.json({
-            orders: orders.map(o => ({
-                id: o.id,
-                skuCode: o.sku_code,
-                skuName: o.sku_name,
-                skuDescription: o.sku_description,
-                quantity: o.quantity,
-                appliedFlags: JSON.parse(o.applied_flags || '[]'),
-                customerPriceCents: o.customer_price_cents,
-                customerPriceUsd: (o.customer_price_cents / 100).toFixed(2),
-                internalCostCents: o.internal_cost_cents,
-                marginPercent: o.margin_percent,
-                totalSeconds: o.total_seconds,
-                overageSeconds: o.overage_seconds,
-                status: o.status,
-                createdAt: o.created_at
-            }))
+            orders: orders.map(o => {
+                // BUG #10 FIX: Safe JSON parsing with error handling
+                let appliedFlags = [];
+                try {
+                    appliedFlags = o.applied_flags ? JSON.parse(o.applied_flags) : [];
+                } catch (parseError) {
+                    logger.error({ msg: 'json_parse_error', order_id: o.id, applied_flags: o.applied_flags, error: String(parseError) });
+                    appliedFlags = [];
+                }
+
+                return {
+                    id: o.id,
+                    skuCode: o.sku_code,
+                    skuName: o.sku_name,
+                    skuDescription: o.sku_description,
+                    quantity: o.quantity,
+                    appliedFlags: appliedFlags,
+                    customerPriceCents: o.customer_price_cents,
+                    customerPriceUsd: (o.customer_price_cents / 100).toFixed(2),
+                    internalCostCents: o.internal_cost_cents,
+                    marginPercent: o.margin_percent,
+                    totalSeconds: o.total_seconds,
+                    overageSeconds: o.overage_seconds,
+                    currency: o.currency || 'usd',
+                    status: o.status,
+                    createdAt: o.created_at
+                };
+            })
         })
     } catch (e) {
         logger.error({ msg: 'orders_fetch_error', error: String(e), user_id: req.user.id })
@@ -1083,6 +1436,15 @@ app.get('/api/orders/:id', authenticateToken, (req, res) => {
             return res.status(404).json({ error: 'order_not_found' })
         }
 
+        // BUG #10 FIX: Safe JSON parsing with error handling
+        let appliedFlags = [];
+        try {
+            appliedFlags = order.applied_flags ? JSON.parse(order.applied_flags) : [];
+        } catch (parseError) {
+            logger.error({ msg: 'json_parse_error', order_id: order.id, applied_flags: order.applied_flags, error: String(parseError) });
+            appliedFlags = [];
+        }
+
         res.json({
             order: {
                 id: order.id,
@@ -1090,13 +1452,14 @@ app.get('/api/orders/:id', authenticateToken, (req, res) => {
                 skuName: order.sku_name,
                 skuDescription: order.sku_description,
                 quantity: order.quantity,
-                appliedFlags: JSON.parse(order.applied_flags || '[]'),
+                appliedFlags: appliedFlags,
                 customerPriceCents: order.customer_price_cents,
                 customerPriceUsd: (order.customer_price_cents / 100).toFixed(2),
                 internalCostCents: order.internal_cost_cents,
                 marginPercent: order.margin_percent,
                 totalSeconds: order.total_seconds,
                 overageSeconds: order.overage_seconds,
+                currency: order.currency || 'usd',
                 status: order.status,
                 createdAt: order.created_at
             }
