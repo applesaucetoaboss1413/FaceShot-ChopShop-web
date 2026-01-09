@@ -9,10 +9,10 @@
 
 import { getUserCurrency } from './currency';
 
-function resolveCurrency(): string {
-  const c = getUserCurrency?.();
-  // Normalize to uppercase string and provide a safe default.
-  const normalized = typeof c === "string" ? c.trim().toUpperCase() : "";
+export function resolveCurrency(): string {
+  const raw = typeof getUserCurrency === "function" ? getUserCurrency() : undefined;
+  const normalized =
+    typeof raw === "string" ? raw.trim().toUpperCase() : "";
   return normalized || "USD"; // default presentment currency
 }
 
@@ -23,6 +23,8 @@ const isDevelopment = import.meta.env.DEV;
 const API_BASE_URL = isDevelopment
   ? 'http://localhost:3000'
   : '';
+
+let tokenUpdatePromise: Promise<void> | null = null;
 
 interface ApiResponse<T = unknown> {
   success: boolean;
@@ -78,6 +80,8 @@ interface SKU {
   id: string;
   code: string;
   name: string;
+  price: number;
+  currency: string;
   vectorId: string;
   vectorName: string;
   vectorCode: string;
@@ -86,7 +90,6 @@ interface SKU {
   basePriceCents: number;
   defaultFlags: string[];
   description: string;
-  currency: string;
 }
 
 interface PricingQuote {
@@ -294,7 +297,7 @@ interface BackendFlag {
   id: string | number;
   code: string;
   label: string;
-  price_multiplier: number;
+  priceMultiplier: number;
   price_add_flat_usd: string;
   price_add_flat_cents: number;
   description: string;
@@ -347,26 +350,30 @@ interface BackendAccountPlan {
 class ApiClient {
   private baseUrl: string;
   private token: string | null = null;
-  private isUpdatingToken = false;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
     this.token = localStorage.getItem('auth_token');
   }
 
-  setToken(token: string | null) {
-    if (this.isUpdatingToken) return;
-    this.isUpdatingToken = true;
-    try {
+  async setToken(token: string | null): Promise<void> {
+    const update = async () => {
       this.token = token;
       if (token) {
         localStorage.setItem('auth_token', token);
       } else {
         localStorage.removeItem('auth_token');
       }
-    } finally {
-      this.isUpdatingToken = false;
+    };
+
+    if (tokenUpdatePromise) {
+      tokenUpdatePromise = tokenUpdatePromise.then(() => update());
+    } else {
+      tokenUpdatePromise = update();
     }
+
+    await tokenUpdatePromise;
+    tokenUpdatePromise = null;
   }
 
   getToken() {
@@ -406,10 +413,10 @@ class ApiClient {
     ) {
       try {
         const bodyObj = JSON.parse(body);
-        bodyObj.currency = bodyObj.currency || currency;
+        // keep existing mutation logic here
         body = JSON.stringify(bodyObj);
       } catch {
-        // leave body unchanged on parse error
+        // leave body as-is if parsing fails
       }
     }
 
@@ -451,7 +458,7 @@ class ApiClient {
     });
 
     if (result.success && result.data?.token) {
-      this.setToken(result.data.token);
+      await this.setToken(result.data.token);
       console.log('[AuthApi] Login success, token stored');
     } else {
       console.warn('[AuthApi] Login failed', { error: result.error });
@@ -468,7 +475,7 @@ class ApiClient {
     });
 
     if (result.success && result.data?.token) {
-      this.setToken(result.data.token);
+      await this.setToken(result.data.token);
       console.log('[AuthApi] Signup success, token stored');
     } else {
       console.warn('[AuthApi] Signup failed', { error: result.error });
@@ -571,9 +578,11 @@ class ApiClient {
     const skus: SKU[] = (result.data.skus || [])
       .filter((sku: any) => sku && sku.id && sku.code && sku.name)
       .map((sku: any) => ({
-        id: String(sku.id),
-        code: String(sku.code),
-        name: String(sku.name),
+        id: sku.id,
+        code: sku.code,
+        name: sku.name,
+        price: sku.price ?? 0,
+        currency: (sku.currency || resolveCurrency()).toUpperCase(),
         vectorId: String(sku.vector_id || ''),
         vectorName: String(sku.vector_name || ''),
         vectorCode: String(sku.vector_code || ''),
@@ -582,7 +591,6 @@ class ApiClient {
         basePriceCents: Number(sku.base_price_cents) || 0,
         defaultFlags: Array.isArray(sku.default_flags) ? sku.default_flags : [],
         description: String(sku.description || ''),
-        currency: (sku.currency || resolveCurrency()).toUpperCase(),
       }));
 
     return {
@@ -771,6 +779,9 @@ class ApiClient {
     return this.request<{ url: string; cloudinary_id: string }>('/api/upload/media', {
       method: 'POST',
       body: formData,
+      headers: {
+        'x-currency': resolveCurrency(),
+      },
     });
   }
 

@@ -209,7 +209,7 @@ const isValidCurrency = (currency) => {
     return SUPPORTED_CURRENCIES.includes(currency.toLowerCase());
 };
 
-// Get currency from request (supports header, query param, or body)
+// Get presentment currency from frontend (resolveCurrency() chooses this; backend validates and uses for Stripe Prices/PaymentIntents)
 const getCurrencyFromRequest = (req) => {
     const currency = (
         req.body?.currency ||
@@ -299,6 +299,7 @@ const authenticateToken = (req, res, next) => {
     }
 }
 
+// Stripe account based in Mexico, supports multi-currency payments via Stripe's built-in handling
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
 
@@ -436,20 +437,18 @@ app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
 
         // MULTI-CURRENCY: Validate and use requested currency
         const requestedCurrency = getCurrencyFromRequest(req);
-        const stripeAmount = convertToStripeAmount(pack.price_cents, requestedCurrency);
+
+        // Use pre-configured Price ID for the requested currency (Stripe handles multi-currency via Price objects)
+        const selectedPriceId = pack.price_ids[requestedCurrency.toLowerCase()];
+        if (!selectedPriceId) {
+            return res.status(400).json({ error: 'currency_not_supported_for_pack' });
+        }
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             mode: 'payment',
             line_items: [{
-                price_data: {
-                    currency: requestedCurrency,
-                    product_data: {
-                        name: `${pack.points} Credits (${pack.type})`,
-                        description: `Credit pack for FaceShot-ChopShop AI tools`
-                    },
-                    unit_amount: stripeAmount
-                },
+                price: selectedPriceId,
                 quantity: 1
             }],
             success_url: `${process.env.FRONTEND_URL}/dashboard?purchase=success`,
@@ -463,13 +462,13 @@ app.post('/api/checkout/credits', authenticateToken, async (req, res) => {
             }
         });
 
-        logger.info({ msg: 'checkout_session_created', user_id: userId, pack_type, currency: requestedCurrency, amount: stripeAmount });
+        logger.info({ msg: 'checkout_session_created', user_id: userId, pack_type, currency: requestedCurrency, price_id: selectedPriceId });
 
         res.json({
             session_url: session.url,
             session_id: session.id,
             currency: requestedCurrency,
-            amount: stripeAmount
+            price_id: selectedPriceId
         });
     } catch (e) {
         logger.error({ msg: 'checkout_error', error: String(e), user_id: req.user.id });
@@ -784,13 +783,14 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         let orderId = order_id
 
         if (!orderId) {
+            const requestedCurrency = getCurrencyFromRequest(req);
             const pricingEngine = new PricingEngine(db)
-            const quote = pricingEngine.quote(userId, skuCodeToUse, 1, [])
+            const quote = pricingEngine.quote(userId, skuCodeToUse, 1, [], requestedCurrency)
 
             // BUG 5 FIX: Added stripe_payment_intent_id field (NULL for non-stripe orders)
             const orderResult = db.prepare(`
-                INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, status, created_at)
-                VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, NULL, 'processing', ?)
+                INSERT INTO orders (user_id, sku_code, quantity, applied_flags, customer_price_cents, internal_cost_cents, margin_percent, total_seconds, overage_seconds, stripe_payment_intent_id, currency, status, created_at)
+                VALUES (?, ?, 1, '[]', ?, ?, ?, ?, ?, NULL, ?, 'processing', ?)
             `).run(
                 userId,
                 skuCodeToUse,
@@ -799,6 +799,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
                 parseFloat(quote.margin_percent),
                 quote.total_seconds,
                 quote.overage_seconds,
+                requestedCurrency,
                 new Date().toISOString()
             )
 
@@ -987,8 +988,9 @@ app.post('/api/pricing/quote', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'sku_code_required' })
         }
 
+        const requestedCurrency = getCurrencyFromRequest(req);
         const pricingEngine = new PricingEngine(db)
-        const quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags)
+        const quote = await pricingEngine.quote(req.user.id, sku_code, quantity, flags, requestedCurrency)
 
         res.json({ quote })
     } catch (e) {
@@ -1042,7 +1044,7 @@ app.post('/api/subscribe', authenticateToken, async (req, res) => {
             mode: 'subscription',
             line_items: [{
                 price_data: {
-                    currency: requestedCurrency, // MULTI-CURRENCY: Use dynamic currency
+                    currency: requestedCurrency, // Stripe handles multi-currency via price_data currency field
                     product_data: {
                         name: plan.name,
                         description: plan.description
@@ -1333,7 +1335,7 @@ app.post('/api/orders/create', authenticateToken, async (req, res) => {
         let quote
 
         try {
-            quote = await pricingEngine.quote(userId, sku_code, quantity, flags)
+            quote = await pricingEngine.quote(userId, sku_code, quantity, flags, requestedCurrency)
         } catch (quoteError) {
             logger.error({ msg: 'order_quote_error', error: String(quoteError) })
             return res.status(400).json({ error: 'pricing_error', details: quoteError.message })

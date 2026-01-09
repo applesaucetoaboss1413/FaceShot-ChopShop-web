@@ -1,5 +1,14 @@
 const { getMonthPeriod } = require('./date-utils');
 
+// Currency symbols mapping
+const CURRENCY_SYMBOLS = {
+  usd: '$', eur: '€', gbp: '£', mxn: '$', cad: 'C$', aud: 'A$', jpy: '¥',
+  cny: '¥', inr: '₹', brl: 'R$', chf: 'CHF', sek: 'kr', nok: 'kr', dkk: 'kr',
+  pln: 'zł', czk: 'Kč', huf: 'Ft', ron: 'lei', try: '₺', zar: 'R', sgd: 'S$',
+  hkd: 'HK$', nzd: 'NZ$', krw: '₩', thb: '฿', myr: 'RM', php: '₱', idr: 'Rp',
+  vnd: '₫', twd: 'NT$', ars: '$', clp: '$', cop: '$', pen: 'S/', uyu: '$'
+};
+
 class PricingEngine {
   constructor(db) {
     this.db = db;
@@ -7,7 +16,7 @@ class PricingEngine {
     this.MIN_MARGIN = Number(process.env.MIN_MARGIN || 0.40);
   }
 
-  async quote(userId, skuCode, quantity = 1, appliedFlags = []) {
+  async quote(userId, skuCode, quantity = 1, appliedFlags = [], currency = 'usd') {
     const sku = this.db.prepare('SELECT * FROM skus WHERE code = ? AND active = 1').get(skuCode);
     if (!sku) throw new Error('sku_not_found');
 
@@ -89,8 +98,9 @@ class PricingEngine {
       sku_name: sku.name,
       quantity,
       applied_flags: allFlags,
+      currency: currency.toLowerCase(),
       customer_price_cents: customerPrice,
-      customer_price_usd: (customerPrice / 100).toFixed(2),
+      customer_price_display: `${CURRENCY_SYMBOLS[currency.toLowerCase()] || '$'}${(customerPrice / 100).toFixed(2)}`,
       internal_cost_cents: internalCost,
       internal_cost_usd: (internalCost / 100).toFixed(2),
       margin_percent: (margin * 100).toFixed(1),
