@@ -26,7 +26,7 @@ const {
     SystemHealthMetric,
     SchemaMigration,
     Stats
-} = require('../FaceShot-ChopShop-web/models');
+} = require('../FaceShot-ChopShop-web/models.js');
 
 let isConnected = false;
 

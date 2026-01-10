@@ -17,7 +17,7 @@ dotenv.config()
 // MongoDB setup
 const { connectDB } = require('../db/mongoClient')
 const db = require('../db/mongo')
-const { ProcessedEvent } = require('./models')
+const { ProcessedEvent } = require('./models.js')
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
