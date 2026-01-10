@@ -47,7 +47,7 @@ See [`spec.md`](./spec.md) for complete technical specification.
 # Server
 PORT=3000
 NODE_ENV=production
-DB_PATH=production.db
+DB_PATH=/var/data/production.db  # Required in production - never use default paths
 PUBLIC_URL=https://your-backend.onrender.com
 FRONTEND_URL=https://your-frontend.onrender.com
 LOG_LEVEL=info
@@ -199,16 +199,16 @@ All platforms use the same environment variable names (see `.env.example`)
 
 #### Environment Separation
 - **Development**: Use `dev.db` (default) - ignored by Git, safe for local development
-- **Production**: Use `production.db` or external database path - never committed to Git
+- **Production**: Explicitly set `DB_PATH` to external database path - never use default paths like `production.db`
 - **Staging/Testing**: Use separate database files or environment-specific paths
 
 #### Configuration
 Set `DB_PATH` environment variable to control database location:
 ```env
-# Development (default)
-DB_PATH=dev.db
+# Development (default - no need to set)
+# DB_PATH=dev.db
 
-# Production
+# Production (required)
 DB_PATH=/var/data/production.db
 
 # Future Postgres migration
@@ -224,8 +224,9 @@ The app uses lightweight migrations compatible with SQLite:
 #### Resetting Database
 To reset your database (⚠️ **destroys all data**):
 ```bash
-# Remove database file
-rm dev.db  # or production.db
+# Remove database file (use the path from DB_PATH)
+rm dev.db  # for development
+# or rm /var/data/production.db  # for production
 
 # Restart server (auto-creates tables and seeds data)
 npm start
@@ -338,7 +339,7 @@ npm start
 ### Database Initialization
 Tables are created automatically on first run. To reset:
 ```bash
-rm production.db
+rm dev.db  # or your configured DB_PATH
 npm start
 ```
 

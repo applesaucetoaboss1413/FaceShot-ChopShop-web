@@ -106,6 +106,8 @@ const limiter = (req, res, next) => {
 
 const db = new Database(config.dbPath)
 
+console.log(`📊 Using database: ${config.dbPath}`)
+
 // Initialize DB and migrate if necessary
 db.exec(`
     CREATE TABLE IF NOT EXISTS users (

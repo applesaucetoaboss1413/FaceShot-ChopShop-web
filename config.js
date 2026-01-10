@@ -2,7 +2,7 @@
 // Ensures all secrets are read from environment variables only, with no hardcoded defaults
 
 const requiredEnvVars = [
-    'JWT_SECRET',
+    'SESSION_SECRET',
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
     'CLOUDINARY_CLOUD_NAME',
@@ -28,7 +28,7 @@ console.log('✅ All required environment variables are present.');
 
 module.exports = {
     // Authentication
-    jwtSecret: process.env.JWT_SECRET,
+    jwtSecret: process.env.SESSION_SECRET,
 
     // Stripe
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
@@ -53,7 +53,7 @@ module.exports = {
     // Other config (with defaults)
     port: process.env.PORT || 3000,
     nodeEnv: process.env.NODE_ENV || 'development',
-    dbPath: process.env.DB_PATH || (process.env.NODE_ENV === 'production' ? 'production.db' : 'dev.db'),
+    dbPath: process.env.DB_PATH || (process.env.NODE_ENV === 'production' ? undefined : 'dev.db'),
     publicUrl: process.env.PUBLIC_URL,
     frontendUrl: process.env.FRONTEND_URL,
     logLevel: process.env.LOG_LEVEL || 'info',
@@ -64,3 +64,36 @@ module.exports = {
     maxJobSeconds: parseInt(process.env.MAX_JOB_SECONDS || '5000'),
     adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim())
 };
+
+// Validate pricing constants for misconfigurations
+const costPerCredit = module.exports.costPerCredit;
+const minMargin = module.exports.minMargin;
+const maxJobSeconds = module.exports.maxJobSeconds;
+
+if (isNaN(costPerCredit) || costPerCredit <= 0) {
+    console.error('❌ CRITICAL: COST_PER_CREDIT must be a positive number');
+    process.exit(1);
+}
+
+if (isNaN(minMargin) || minMargin < 0 || minMargin > 1) {
+    console.error('❌ CRITICAL: MIN_MARGIN must be between 0 and 1');
+    process.exit(1);
+}
+
+if (isNaN(maxJobSeconds) || maxJobSeconds <= 0) {
+    console.error('❌ CRITICAL: MAX_JOB_SECONDS must be a positive integer');
+    process.exit(1);
+}
+
+console.log('✅ Pricing constants validated successfully.');
+console.log(`   - COST_PER_CREDIT: $${costPerCredit.toFixed(4)} per credit`);
+console.log(`   - MIN_MARGIN: ${(minMargin * 100).toFixed(1)}%`);
+console.log(`   - MAX_JOB_SECONDS: ${maxJobSeconds}`);
+
+// Validate database path configuration
+if (module.exports.nodeEnv === 'production' && !module.exports.dbPath) {
+    console.error('❌ CRITICAL: DB_PATH must be explicitly set in production environment.');
+    console.error('💡 Please set DB_PATH in your environment variables (e.g., DB_PATH=/var/data/production.db)');
+    console.error('   Never use default paths like "production.db" to prevent accidental commits.');
+    process.exit(1);
+}

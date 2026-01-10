@@ -1,50 +1,50 @@
 import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Upload, 
-  Repeat, 
-  User, 
-  Video, 
-  Coins, 
-  History, 
+import {
+  Upload,
+  Repeat,
+  User,
+  Video,
+  Coins,
+  History,
   Settings,
   LogOut,
   Zap,
   Image as ImageIcon,
   Loader2,
   Download,
-  Trash2,
-  Plus
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Job } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate } from 'react-router-dom';
+import { CreditBalance } from '@/components/shared/CreditBalance';
 
 type TransformationType = 'face-swap' | 'avatar' | 'image-to-video';
 
 const transformations = [
-  { 
-    id: 'face-swap' as TransformationType, 
-    name: 'Face Swap', 
-    icon: Repeat, 
+  {
+    id: 'face-swap' as TransformationType,
+    name: 'Face Swap',
+    icon: Repeat,
     credits: 1,
     description: 'Swap faces between two images',
     gradient: 'from-cyan-500 to-blue-500'
   },
-  { 
-    id: 'avatar' as TransformationType, 
-    name: 'AI Avatar', 
-    icon: User, 
+  {
+    id: 'avatar' as TransformationType,
+    name: 'AI Avatar',
+    icon: User,
     credits: 3,
     description: 'Generate unique AI avatars',
     gradient: 'from-purple-500 to-pink-500'
   },
-  { 
-    id: 'image-to-video' as TransformationType, 
-    name: 'Image to Video', 
-    icon: Video, 
+  {
+    id: 'image-to-video' as TransformationType,
+    name: 'Image to Video',
+    icon: Video,
     credits: 5,
     description: 'Animate your static images',
     gradient: 'from-orange-500 to-red-500'
@@ -55,7 +55,7 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [selectedType, setSelectedType] = useState<TransformationType>('face-swap');
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [targetImage, setTargetImage] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export default function Dashboard() {
         setCredits(result.data.credits);
       }
     });
-    
+
     api.getJobHistory().then((result) => {
       if (result.success && result.data) {
         setJobs(result.data);
@@ -93,7 +93,7 @@ export default function Dashboard() {
         });
         return;
       }
-      
+
       const reader = new FileReader();
       reader.onload = (event) => {
         setImage(event.target?.result as string);
@@ -142,13 +142,13 @@ export default function Dashboard() {
     if (result.success && result.data) {
       setCurrentJob(result.data);
       setCredits(prev => prev - requiredCredits);
-      
+
       // Poll for job completion
       const pollInterval = setInterval(async () => {
         const statusResult = await api.getJobStatus(result.data!.id);
         if (statusResult.success && statusResult.data) {
           setCurrentJob(statusResult.data);
-          
+
           if (statusResult.data.status === 'completed') {
             clearInterval(pollInterval);
             setIsProcessing(false);
@@ -183,12 +183,12 @@ export default function Dashboard() {
     navigate('/');
   };
 
-  const ImageUploader = ({ 
-    image, 
-    setImage, 
-    label 
-  }: { 
-    image: string | null; 
+  const ImageUploader = ({
+    image,
+    setImage,
+    label
+  }: {
+    image: string | null;
     setImage: React.Dispatch<React.SetStateAction<string | null>>;
     label: string;
   }) => (
@@ -215,9 +215,9 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground">Click to upload</p>
             <p className="text-xs text-muted-foreground/60 mt-1">PNG, JPG up to 10MB</p>
           </div>
-          <input 
-            type="file" 
-            className="hidden" 
+          <input
+            type="file"
+            className="hidden"
             accept="image/*"
             onChange={(e) => handleFileUpload(e, setImage)}
           />
@@ -278,11 +278,10 @@ export default function Dashboard() {
                     <button
                       key={t.id}
                       onClick={() => setSelectedType(t.id)}
-                      className={`p-4 rounded-xl border-2 transition-all text-left ${
-                        selectedType === t.id
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/30'
-                      }`}
+                      className={`p-4 rounded-xl border-2 transition-all text-left ${selectedType === t.id
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/30'
+                        }`}
                     >
                       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${t.gradient} flex items-center justify-center mb-3`}>
                         <t.icon className="w-5 h-5 text-white" />
@@ -400,13 +399,12 @@ export default function Dashboard() {
                             {new Date(job.createdAt).toLocaleDateString()}
                           </div>
                         </div>
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          job.status === 'completed' 
-                            ? 'bg-green-500/20 text-green-400'
-                            : job.status === 'failed'
+                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${job.status === 'completed'
+                          ? 'bg-green-500/20 text-green-400'
+                          : job.status === 'failed'
                             ? 'bg-destructive/20 text-destructive'
                             : 'bg-primary/20 text-primary'
-                        }`}>
+                          }`}>
                           {job.status}
                         </div>
                       </div>
