@@ -34,7 +34,6 @@ export default function CreateNew() {
     useEffect(() => {
         if (user) {
             loadCatalog();
-            // Load dashboard data
             loadDashboardData();
         }
     }, [user]);
@@ -279,8 +278,8 @@ export default function CreateNew() {
                                                 }
                                             }}
                                             className={`w-full text-left px-4 py-3 rounded-lg transition ${selectedCategory === cat
-                                                    ? 'bg-blue-600 text-white'
-                                                    : 'bg-gray-100 hover:bg-gray-200'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'bg-gray-100 hover:bg-gray-200'
                                                 }`}
                                         >
                                             <div className="font-medium">{categoryNames[cat]}</div>
@@ -305,8 +304,8 @@ export default function CreateNew() {
                                         key={tool.sku_code}
                                         onClick={() => selectTool(tool)}
                                         className={`text-left p-4 rounded-lg border-2 transition ${selectedTool?.sku_code === tool.sku_code
-                                                ? 'border-blue-600 bg-blue-50'
-                                                : 'border-gray-200 hover:border-blue-300'
+                                            ? 'border-blue-600 bg-blue-50'
+                                            : 'border-gray-200 hover:border-blue-300'
                                             }`}
                                     >
                                         <div className="flex items-start justify-between mb-2">
