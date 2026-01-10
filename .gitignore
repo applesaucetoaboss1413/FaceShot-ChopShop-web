@@ -48,10 +48,13 @@ status.txt
 # Environment files
 *.env
 *.env.*
--e 
+-e
 # Environment files
 *.env
 *.env.*
+
+# Legacy frontends
+legacy/
 -e 
 # Environment files
 *.env
