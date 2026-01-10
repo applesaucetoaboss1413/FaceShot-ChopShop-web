@@ -51,8 +51,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
-    console.log("[PublicRoute] Already authenticated, redirecting to /dashboard");
-    return <Navigate to="/dashboard" replace />;
+    console.log("[PublicRoute] Already authenticated, redirecting to /chopshop");
+    return <Navigate to="/chopshop" replace />;
   }
 
   return <>{children}</>;

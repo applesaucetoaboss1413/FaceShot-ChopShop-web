@@ -23,7 +23,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     const result = await login(email, password);
-    
+
     if (result.success) {
       console.log('[LoginPage] Login successful, navigating to dashboard');
       toast({
@@ -44,7 +44,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate('/chopshop');
     }
   }, [user, navigate]);
 

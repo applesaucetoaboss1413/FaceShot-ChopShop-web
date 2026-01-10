@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Coins, 
-  Plus, 
-  Minus, 
-  Clock, 
-  LogOut, 
-  Zap, 
+import {
+  Coins,
+  Plus,
+  Minus,
+  Clock,
+  LogOut,
+  Zap,
   TrendingUp,
   TrendingDown,
   History,
@@ -34,7 +34,7 @@ export default function CreditsHistory() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [credits, setCredits] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,7 +111,7 @@ export default function CreditsHistory() {
       const totalSpent = mockTransactions
         .filter(t => t.type === 'debit')
         .reduce((sum, t) => sum + t.amount, 0);
-      
+
       const totalPurchased = mockTransactions
         .filter(t => t.type === 'credit')
         .reduce((sum, t) => sum + t.amount, 0);
@@ -201,10 +201,10 @@ export default function CreditsHistory() {
       <main className="pt-24 pb-12">
         <div className="container mx-auto px-4 max-w-6xl">
           {/* Back Button */}
-          <Link to="/dashboard">
+          <Link to="/chopshop">
             <Button variant="ghost" className="mb-6">
               <ChevronLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
+              Back to ChopShop
             </Button>
           </Link>
 
@@ -311,11 +311,10 @@ export default function CreditsHistory() {
                         className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                       >
                         <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            transaction.type === 'credit'
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${transaction.type === 'credit'
                               ? 'bg-green-500/20'
                               : 'bg-red-500/20'
-                          }`}>
+                            }`}>
                             {transaction.type === 'credit' ? (
                               <Plus className="w-5 h-5 text-green-500" />
                             ) : (
@@ -336,9 +335,8 @@ export default function CreditsHistory() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className={`font-semibold ${
-                            transaction.type === 'credit' ? 'text-green-500' : 'text-red-500'
-                          }`}>
+                          <div className={`font-semibold ${transaction.type === 'credit' ? 'text-green-500' : 'text-red-500'
+                            }`}>
                             {transaction.type === 'credit' ? '+' : '-'}{transaction.amount.toLocaleString()}
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">

@@ -41,14 +41,14 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate('/chopshop');
     }
   }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('[SignupPage] Submit clicked', { email });
-    
+
     if (password.length < 6) {
       toast({
         title: 'Password too short',
@@ -61,7 +61,7 @@ export default function SignupPage() {
     setIsLoading(true);
 
     const result = await signup(email, password, name);
-    
+
     if (result.success) {
       console.log('[SignupPage] Signup successful, navigating to dashboard');
       toast({

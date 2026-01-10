@@ -423,6 +423,14 @@ app.get('/api/web/catalog', (req, res) => {
             content: [],
             bundle: []
         },
+        total_tools: 0,
+        category_names: {
+            image: 'Image Generation',
+            video: 'Video Creation',
+            voice: 'Voice & Audio',
+            content: 'Content & SEO',
+            bundle: 'Bundles & Packs'
+        },
         user_plan: null // Will be populated based on user data if needed
     };
 
@@ -433,25 +441,112 @@ app.get('/api/web/catalog', (req, res) => {
 
     catalogConfig.catalog.forEach(item => {
         if (categorized.categories[item.category]) {
+            // Determine inputs based on category
+            let inputs = ['image'];
+            if (item.category === 'video') inputs = ['video', 'image'];
+            if (item.category === 'voice') inputs = ['audio'];
+            if (item.category === 'content') inputs = ['text'];
+
             categorized.categories[item.category].push({
                 sku_code: item.key,
                 display_name: item.name,
                 name: item.name,
                 description: item.description,
                 category: item.category,
-                base_price_usd: item.basePrice / 100, // Convert cents to dollars
-                base_credits: Math.ceil(item.basePrice / 100), // Rough credit conversion
+                base_price_usd: (item.basePrice / 100).toFixed(2),
+                base_price_cents: item.basePrice,
+                base_credits: Math.ceil(item.basePrice / 100),
                 icon: item.icon,
                 vector_name: item.key,
-                inputs: ['image'], // Default input type, can be customized per item
-                ...item // Include any other properties
+                vector_code: item.key,
+                inputs: inputs,
+                a2e_tool: item.key,
+                ...item
             });
+            categorized.total_tools++;
         }
     });
 
     console.log('Returning catalog:', categorized);
     res.json(categorized);
 })
+
+// Pricing Plans endpoint
+app.get('/api/plans', async (req, res) => {
+    try {
+        const plans = await db.getPlans(true);
+        const formattedPlans = plans.map(plan => ({
+            id: plan.id,
+            code: plan.code,
+            name: plan.name,
+            description: plan.description || '',
+            monthly_price_usd: plan.monthly_price_cents / 100,
+            monthly_price_cents: plan.monthly_price_cents,
+            included_seconds: plan.included_seconds || 0,
+            overage_rate_per_second_cents: plan.overage_rate_per_second_cents || 0,
+            active: plan.active
+        }));
+        res.json({ plans: formattedPlans });
+    } catch (e) {
+        logger.error({ msg: 'plans_fetch_error', error: String(e) });
+        res.status(500).json({ error: 'failed_to_load_plans' });
+    }
+});
+
+// SKUs endpoint
+app.get('/api/skus', async (req, res) => {
+    try {
+        const vectorId = req.query.vector_id;
+        let skus = await db.getSkus(true);
+
+        // Filter by vector_id if provided
+        if (vectorId) {
+            skus = skus.filter(sku => sku.vector_id === vectorId);
+        }
+
+        const formattedSkus = skus.map(sku => ({
+            id: sku.id,
+            code: sku.code,
+            name: sku.name,
+            description: sku.description || '',
+            vector_id: sku.vector_id || '',
+            vector_name: sku.vector_name || '',
+            vector_code: sku.vector_code || '',
+            base_price_usd: (sku.base_price_cents / 100).toFixed(2),
+            base_price_cents: sku.base_price_cents,
+            base_credits: sku.base_credits || 0,
+            default_flags: sku.default_flags || [],
+            price: sku.base_price_cents / 100,
+            currency: 'USD',
+            active: sku.active
+        }));
+
+        res.json({ skus: formattedSkus });
+    } catch (e) {
+        logger.error({ msg: 'skus_fetch_error', error: String(e) });
+        res.status(500).json({ error: 'failed_to_load_skus' });
+    }
+});
+
+// Flags endpoint
+app.get('/api/flags', async (req, res) => {
+    try {
+        const flags = await db.getFlags(true);
+        const formattedFlags = flags.map(flag => ({
+            id: flag.id,
+            code: flag.code,
+            label: flag.label,
+            description: flag.description || '',
+            price_multiplier: flag.price_multiplier || 1.0,
+            price_add_flat_cents: flag.price_add_flat_cents || 0,
+            active: flag.active
+        }));
+        res.json({ flags: formattedFlags });
+    } catch (e) {
+        logger.error({ msg: 'flags_fetch_error', error: String(e) });
+        res.status(500).json({ error: 'failed_to_load_flags' });
+    }
+});
 
 // Test endpoint
 app.get('/api/web/test', (req, res) => {
@@ -652,8 +747,18 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Initialize MongoDB and start server
+const { initializeDatabase } = require('../db-init.js');
+
 connectDB()
-    .then(() => {
+    .then(async () => {
+        // Initialize database with seed data (Plans, SKUs, Flags)
+        try {
+            await initializeDatabase();
+            logger.info({ msg: 'database_initialized' });
+        } catch (err) {
+            logger.warn({ msg: 'database_init_warning', error: err.message });
+        }
+
         app.listen(port, () => {
             logger.info({ msg: 'server_started', port, database: 'MongoDB Atlas' })
         })
