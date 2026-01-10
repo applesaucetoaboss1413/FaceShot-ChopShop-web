@@ -85,7 +85,7 @@ npm install && cd frontend && npm install && npm run build
 
 ### Start Command
 ```bash
-node index.js
+NODE_ENV=production node index.js
 ```
 
 ### Environment Variables

@@ -44,22 +44,37 @@ Before deploying:
 2. **Configure Environment Variables** when prompted:
 
 ```env
-# Required Variables
+# Core Configuration
+PORT=3000
 NODE_ENV=production
+DB_PATH=/var/data/production.db
+PUBLIC_URL=https://your-backend.onrender.com
+FRONTEND_URL=https://your-frontend.onrender.com
+LOG_LEVEL=info
+
+# Authentication
 JWT_SECRET=[your-32-character-random-string]
+
+# A2E API Integration
 A2E_API_KEY=[your-a2e-api-key]
+A2E_BASE_URL=https://video.a2e.ai
+
+# Stripe Payments
 STRIPE_SECRET_KEY=[your-stripe-live-secret-key]
 STRIPE_WEBHOOK_SECRET=[your-stripe-webhook-secret]
+
+# File Upload (Cloudinary)
 CLOUDINARY_CLOUD_NAME=[your-cloudinary-cloud-name]
 CLOUDINARY_API_KEY=[your-cloudinary-api-key]
 CLOUDINARY_API_SECRET=[your-cloudinary-api-secret]
-ADMIN_EMAILS=[your-email@domain.com]
 
-# Optional (defaults are fine)
+# Admin
+ADMIN_SECRET=[your-admin-secret]
+
+# Pricing System
 COST_PER_CREDIT=0.0111
 MIN_MARGIN=0.40
-DB_PATH=production.db
-LOG_LEVEL=info
+MAX_JOB_SECONDS=5000
 ```
 
 3. **Click "Deploy Now"**
@@ -144,14 +159,14 @@ After deployment, test these critical flows:
 
 | Variable | Description | Example | Where to Get |
 |----------|-------------|---------|--------------|
-| `SESSION_SECRET` | JWT signing key | `a8f3k2...` | Generate random 32+ chars |
+| `JWT_SECRET` | JWT signing key | `a8f3k2...` | Generate random 32+ chars |
 | `A2E_API_KEY` | A2E API authentication | `a2e_live_...` | https://a2e.ai dashboard |
 | `STRIPE_SECRET_KEY` | Stripe live secret key | `sk_live_...` | https://dashboard.stripe.com/apikeys |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing | `whsec_...` | https://dashboard.stripe.com/webhooks |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary account name | `my-cloud` | https://cloudinary.com/console |
 | `CLOUDINARY_API_KEY` | Cloudinary API key | `123456789012345` | https://cloudinary.com/console |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret | `abcdef...` | https://cloudinary.com/console |
-| `ADMIN_EMAILS` | Admin access emails | `admin@site.com` | Your email |
+| `ADMIN_SECRET` | Admin access secret | `your-admin-secret` | Generate random string |
 
 ### Optional Variables (Defaults Provided)
 
@@ -159,11 +174,14 @@ After deployment, test these critical flows:
 |----------|---------|-------------|
 | `NODE_ENV` | `production` | Environment mode |
 | `PORT` | `3000` | Server port |
-| `DB_PATH` | `production.db` | SQLite database file |
+| `DB_PATH` | `/var/data/production.db` | SQLite database file |
+| `PUBLIC_URL` | Auto-detected | Backend public URL |
+| `FRONTEND_URL` | Auto-detected | Frontend URL for CORS |
+| `LOG_LEVEL` | `info` | Logging verbosity |
+| `A2E_BASE_URL` | `https://video.a2e.ai` | A2E API base URL |
 | `COST_PER_CREDIT` | `0.0111` | Cost per A2E credit |
 | `MIN_MARGIN` | `0.40` | Minimum profit margin (40%) |
-| `LOG_LEVEL` | `info` | Logging verbosity |
-| `FRONTEND_URL` | Auto-detected | Frontend URL for CORS |
+| `MAX_JOB_SECONDS` | `5000` | Maximum job duration |
 
 ---
 

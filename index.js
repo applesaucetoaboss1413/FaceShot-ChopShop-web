@@ -111,9 +111,9 @@ console.log(`📊 Using database: ${config.dbPath}`)
 // Initialize DB and migrate if necessary
 db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY, 
-        email TEXT UNIQUE, 
-        password_hash TEXT, 
+        id INTEGER PRIMARY KEY,
+        email TEXT UNIQUE,
+        password_hash TEXT,
         first_name TEXT,
         telegram_user_id TEXT UNIQUE,
         created_at TEXT
@@ -121,16 +121,16 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS user_credits (user_id INTEGER, balance INTEGER DEFAULT 0);
     CREATE TABLE IF NOT EXISTS purchases (id INTEGER PRIMARY KEY, user_id INTEGER, pack_type TEXT, points INTEGER, amount_cents INTEGER, currency TEXT DEFAULT 'usd', created_at TEXT);
     CREATE TABLE IF NOT EXISTS jobs (
-        id INTEGER PRIMARY KEY, 
-        user_id INTEGER, 
-        type TEXT, 
-        status TEXT, 
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        type TEXT,
+        status TEXT,
         a2e_task_id TEXT,
-        result_url TEXT, 
+        result_url TEXT,
         error_message TEXT,
         cost_credits INTEGER DEFAULT 0,
         order_id INTEGER,
-        created_at TEXT, 
+        created_at TEXT,
         updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS analytics_events (id INTEGER PRIMARY KEY, type TEXT, user_id INTEGER, data TEXT, created_at TEXT);
@@ -145,7 +145,27 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_plan_usage_user_period ON plan_usage(user_id, period_start, period_end);
     CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, sku_code TEXT NOT NULL, quantity INTEGER DEFAULT 1, applied_flags TEXT DEFAULT '[]', customer_price_cents INTEGER NOT NULL, internal_cost_cents INTEGER NOT NULL, margin_percent REAL NOT NULL, total_seconds INTEGER NOT NULL, overage_seconds INTEGER DEFAULT 0, stripe_payment_intent_id TEXT, currency TEXT DEFAULT 'usd', status TEXT DEFAULT 'pending', created_at TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+    CREATE TABLE IF NOT EXISTS processed_webhooks (event_id TEXT PRIMARY KEY, processed_at TEXT NOT NULL);
 `)
+
+// Runtime schema verification
+const expectedTables = [
+    'users', 'user_credits', 'purchases', 'jobs', 'analytics_events',
+    'miniapp_creations', 'vectors', 'plans', 'skus', 'flags',
+    'user_plans', 'plan_usage', 'orders', 'processed_webhooks'
+];
+
+const existingTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row => row.name);
+const missingTables = expectedTables.filter(table => !existingTables.includes(table));
+
+if (missingTables.length > 0) {
+    logger.error({ msg: 'schema_verification_failed', missing_tables: missingTables });
+    console.error('❌ CRITICAL: Database schema verification failed. Missing tables:', missingTables.join(', '));
+    console.error('💡 This indicates a database migration issue. Please check migrations and database integrity.');
+    process.exit(1);
+} else {
+    console.log('✅ Database schema verification passed.');
+}
 
 const nowSeed = new Date().toISOString()
 

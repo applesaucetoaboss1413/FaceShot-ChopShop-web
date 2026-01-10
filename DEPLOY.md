@@ -18,12 +18,24 @@ This guide explains how to deploy the FaceShot-ChopShop Web App using Docker.
    ```
 
 2. **Configure Environment Variables:**
-   Copy the example environment file and fill in your secrets.
-   ```bash
-   cp scripts/.env.example .env
-   nano .env
-   ```
-   Ensure `NODE_ENV=production` and `DB_PATH=/app/production.db` are set (or use defaults in docker-compose).
+    Copy the example environment file and fill in your secrets.
+    ```bash
+    cp .env.example .env
+    nano .env
+    ```
+    Ensure the following are set for production:
+    ```env
+    NODE_ENV=production
+    DB_PATH=/app/production.db
+    JWT_SECRET=[your-jwt-secret]
+    A2E_API_KEY=[your-a2e-key]
+    STRIPE_SECRET_KEY=[your-stripe-key]
+    STRIPE_WEBHOOK_SECRET=[your-webhook-secret]
+    CLOUDINARY_CLOUD_NAME=[your-cloud-name]
+    CLOUDINARY_API_KEY=[your-api-key]
+    CLOUDINARY_API_SECRET=[your-api-secret]
+    ADMIN_SECRET=[your-admin-secret]
+    ```
 
 3. **Initialize Database File:**
    Create an empty database file to be mounted by Docker.

@@ -275,16 +275,16 @@ export default function ChopShop() {
 
   const calculatePrice = () => {
     if (!selectedTool) return;
-    
+
     let price = selectedTool.base_price_cents;
-    
+
     // Apply adjustment multipliers and additions
     Object.keys(adjustments).forEach(key => {
       const def = adjustmentDefs[key];
       const value = adjustments[key];
-      
+
       if (!def) return;
-      
+
       if (def.type === 'select' && def.options) {
         const option = def.options.find((o: any) => o.value === value);
         if (option && option.multiplier) {
@@ -296,7 +296,7 @@ export default function ChopShop() {
         price += def.priceAdd;
       }
     });
-    
+
     setEstimatedPrice(Math.round(price));
   };
 
@@ -313,17 +313,16 @@ export default function ChopShop() {
 
   const handleProcess = async () => {
     if (!selectedTool) return;
-    
+
     setIsProcessing(true);
-    
+
     try {
       const result = await api.processJob({
-        type: selectedTool.sku_code,
-        sourceImage: uploadedFiles.image || uploadedFiles.source_image,
-        targetImage: uploadedFiles.target_image,
+        sku_code: selectedTool.sku_code,
+        media_url: uploadedFiles.image || uploadedFiles.source_image || uploadedFiles.video || uploadedFiles.audio,
         options: adjustments
       });
-      
+
       if (result.success) {
         toast({
           title: 'Processing started!',
@@ -351,7 +350,7 @@ export default function ChopShop() {
   const renderAdjustment = (key: string) => {
     const def = adjustmentDefs[key];
     if (!def) return null;
-    
+
     const value = adjustments[key] ?? def.default;
 
     switch (def.type) {
@@ -359,8 +358,8 @@ export default function ChopShop() {
         return (
           <div key={key} className="space-y-2">
             <label className="text-sm font-medium">{def.label}</label>
-            <Select 
-              value={value} 
+            <Select
+              value={value}
               onValueChange={(v) => setAdjustments(prev => ({ ...prev, [key]: v }))}
             >
               <SelectTrigger>
@@ -376,7 +375,7 @@ export default function ChopShop() {
             </Select>
           </div>
         );
-      
+
       case 'slider':
         return (
           <div key={key} className="space-y-2">
@@ -393,7 +392,7 @@ export default function ChopShop() {
             />
           </div>
         );
-      
+
       case 'checkbox':
         return (
           <div key={key} className="flex items-center space-x-2">
@@ -404,7 +403,7 @@ export default function ChopShop() {
             <label className="text-sm font-medium">{def.label}</label>
           </div>
         );
-      
+
       case 'textarea':
         return (
           <div key={key} className="space-y-2">
@@ -417,7 +416,7 @@ export default function ChopShop() {
             />
           </div>
         );
-      
+
       default:
         return null;
     }
@@ -444,7 +443,7 @@ export default function ChopShop() {
               <Coins className="w-4 h-4 text-primary" />
               <span className="font-semibold">{credits}</span>
             </div>
-            
+
             <Link to="/pricing">
               <Button variant="glow" size="sm">
                 <Plus className="w-4 h-4 mr-1" />
@@ -499,11 +498,10 @@ export default function ChopShop() {
                             setSelectedCategory(cat.id);
                             setSelectedTool(null);
                           }}
-                          className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
-                            selectedCategory === cat.id
+                          className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${selectedCategory === cat.id
                               ? 'bg-primary text-primary-foreground'
                               : 'hover:bg-muted'
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg bg-gradient-to-br ${cat.gradient}`}>
@@ -511,11 +509,10 @@ export default function ChopShop() {
                             </div>
                             <span className="font-medium">{cat.name}</span>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            selectedCategory === cat.id 
-                              ? 'bg-primary-foreground/20' 
+                          <span className={`text-xs px-2 py-1 rounded-full ${selectedCategory === cat.id
+                              ? 'bg-primary-foreground/20'
                               : 'bg-muted'
-                          }`}>
+                            }`}>
                             {toolCount}
                           </span>
                         </button>
@@ -530,22 +527,20 @@ export default function ChopShop() {
                   <div className="flex flex-col gap-2">
                     <button
                       onClick={() => setMode('simple')}
-                      className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                        mode === 'simple'
+                      className={`p-3 rounded-lg text-sm font-medium transition-all ${mode === 'simple'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted hover:bg-muted/70'
-                      }`}
+                        }`}
                     >
                       🎯 Simple Mode
                       <div className="text-xs opacity-80 mt-1">Quick presets</div>
                     </button>
                     <button
                       onClick={() => setMode('advanced')}
-                      className={`p-3 rounded-lg text-sm font-medium transition-all ${
-                        mode === 'advanced'
+                      className={`p-3 rounded-lg text-sm font-medium transition-all ${mode === 'advanced'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted hover:bg-muted/70'
-                      }`}
+                        }`}
                     >
                       ⚙️ Advanced Mode
                       <div className="text-xs opacity-80 mt-1">Full control</div>
@@ -560,17 +555,16 @@ export default function ChopShop() {
                   <h2 className="text-xl font-bold mb-4">
                     {catalog?.category_names[selectedCategory] || categories.find(c => c.id === selectedCategory)?.name}
                   </h2>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {filteredTools.map((tool) => (
                       <button
                         key={tool.sku_code}
                         onClick={() => setSelectedTool(tool)}
-                        className={`p-4 rounded-xl border-2 transition-all text-left ${
-                          selectedTool?.sku_code === tool.sku_code
+                        className={`p-4 rounded-xl border-2 transition-all text-left ${selectedTool?.sku_code === tool.sku_code
                             ? 'border-primary bg-primary/10'
                             : 'border-border hover:border-primary/30'
-                        }`}
+                          }`}
                       >
                         <div className="text-3xl mb-2">{tool.icon}</div>
                         <div className="font-semibold mb-1">{tool.display_name || tool.name}</div>
@@ -610,9 +604,9 @@ export default function ChopShop() {
                           <p className="text-xs text-muted-foreground">{selectedTool.sku_code}</p>
                         </div>
                       </div>
-                      
+
                       <p className="text-sm text-muted-foreground mb-4">{selectedTool.description}</p>
-                      
+
                       {/* File Uploads based on tool inputs */}
                       {selectedTool.inputs.map((input: string) => {
                         if (input === 'image' || input === 'audio' || input === 'video') {

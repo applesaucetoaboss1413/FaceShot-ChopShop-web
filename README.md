@@ -97,6 +97,8 @@ MIN_MARGIN=0.40
 MAX_JOB_SECONDS=5000
 ```
 
+**Important**: When `NODE_ENV=production`, the application will validate that no environment variables are set to their placeholder values (e.g., `your_jwt_secret_here`). Replace all placeholders with actual values before deploying to production.
+
 ## Installation
 
 ### Backend

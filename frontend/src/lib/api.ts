@@ -50,10 +50,12 @@ interface Job {
 }
 
 interface ProcessJobPayload {
-  type: 'face-swap' | 'avatar' | 'image-to-video';
-  sourceImage: string; // base64 or URL
+  sku_code?: string; // New SKU-based processing
+  type?: 'face-swap' | 'avatar' | 'image-to-video'; // Legacy support
+  sourceImage?: string; // base64 or URL
   targetImage?: string; // for face-swap
   options?: Record<string, unknown>;
+  media_url?: string; // For uploaded media
 }
 
 interface LoginPayload {
@@ -491,10 +493,25 @@ class ApiClient {
   }
 
   // Job/Processing endpoints
-  async processJob(payload: ProcessJobPayload): Promise<ApiResponse<Job>> {
-    return this.request<Job>('/api/web/process', {
+  async processJob(payload: ProcessJobPayload): Promise<ApiResponse<any>> {
+    // Support both new SKU-based and legacy type-based processing
+    const requestPayload = { ...payload };
+
+    // If using legacy type, map to SKU code for backward compatibility
+    if (payload.type && !payload.sku_code) {
+      const typeToSku: Record<string, string> = {
+        'face-swap': 'A1-IG',
+        'avatar': 'A1-IG',
+        'image-to-video': 'C2-30',
+        'enhance': 'A3-4K',
+        'bgremove': 'A1-IG'
+      };
+      requestPayload.sku_code = typeToSku[payload.type] || 'A1-IG';
+    }
+
+    return this.request('/api/web/process', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     });
   }
 
@@ -509,6 +526,19 @@ class ApiClient {
   // Credits & Payments
   async getCredits(): Promise<ApiResponse<{ balance: number }>> {
     return this.request<{ balance: number }>('/api/web/credits');
+  }
+
+  // Tool Catalog
+  async getCatalog(): Promise<ApiResponse<any>> {
+    return this.request('/api/web/catalog');
+  }
+
+  async getToolCatalog(): Promise<ApiResponse<any>> {
+    return this.request('/api/web/tool-catalog');
+  }
+
+  async getToolCatalogBySku(skuCode: string): Promise<ApiResponse<any>> {
+    return this.request(`/api/web/tool-catalog/${skuCode}`);
   }
   async getPricingPlans(): Promise<ApiResponse<PricingPlan[]>> {
 

@@ -51,6 +51,7 @@ function initializeDatabase() {
         CREATE INDEX IF NOT EXISTS idx_plan_usage_user_period ON plan_usage(user_id, period_start, period_end);
         CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, sku_code TEXT NOT NULL, quantity INTEGER DEFAULT 1, applied_flags TEXT DEFAULT '[]', customer_price_cents INTEGER NOT NULL, internal_cost_cents INTEGER NOT NULL, margin_percent REAL NOT NULL, total_seconds INTEGER NOT NULL, overage_seconds INTEGER DEFAULT 0, stripe_payment_intent_id TEXT, currency TEXT DEFAULT 'usd', status TEXT DEFAULT 'pending', created_at TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+        CREATE TABLE IF NOT EXISTS processed_webhooks (event_id TEXT PRIMARY KEY, processed_at TEXT NOT NULL);
     `);
 
     const nowSeed = new Date().toISOString();
