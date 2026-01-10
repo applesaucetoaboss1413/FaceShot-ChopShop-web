@@ -343,6 +343,11 @@ app.post('/api/auth/signup', async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 10)
         const user = await db.createUser(email, passwordHash)
 
+        // Award free signup credits
+        const freeCredits = parseInt(process.env.SIGNUP_FREE_CREDITS) || 5
+        await db.addCredits(user.id, freeCredits)
+        logger.info({ msg: 'signup_free_credited', userId: user.id, email, credits: freeCredits })
+
         const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
 
         res.status(201).json({

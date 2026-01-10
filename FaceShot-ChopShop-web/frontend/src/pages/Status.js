@@ -42,8 +42,8 @@ export default function Status() {
                     {status === 'completed' ? (
                         <div className="mt-8">
                             <p className="mb-4">Your creation is ready!</p>
-                            <Link to="/dashboard" className="bg-black text-white px-6 py-2 rounded">
-                                Go to Dashboard
+                            <Link to="/create" className="bg-black text-white px-6 py-2 rounded">
+                                Back to ChopShop
                             </Link>
                         </div>
                     ) : (

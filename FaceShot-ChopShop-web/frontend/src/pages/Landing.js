@@ -13,7 +13,7 @@ export default function Landing() {
 
     useEffect(() => {
         getStats().then(res => setStats(res.data)).catch(console.error);
-        if (user) navigate('/dashboard');
+        if (user) navigate('/create');
     }, [user, navigate]);
 
     return (
@@ -73,33 +73,33 @@ export default function Landing() {
                         transition={{ duration: 0.6, delay: 0.25 }}
                         className="flex items-center justify-center gap-4 mb-10 flex-wrap"
                     >
-                        <a 
-                            href="https://t.me/FaceSwapVideoAi" 
-                            target="_blank" 
+                        <a
+                            href="https://t.me/FaceSwapVideoAi"
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors shadow-lg"
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+                                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z" />
                             </svg>
                             <span className="font-semibold">Telegram Channel</span>
                         </a>
 
-                        <a 
-                            href="https://www.facebook.com/share/17gM2SR4mA/" 
-                            target="_blank" 
+                        <a
+                            href="https://www.facebook.com/share/17gM2SR4mA/"
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-lg"
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                             </svg>
                             <span className="font-semibold">Facebook Page</span>
                         </a>
 
-                        <a 
-                            href="https://telegramalam.onrender.com/miniapp/" 
-                            target="_blank" 
+                        <a
+                            href="https://telegramalam.onrender.com/miniapp/"
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 px-6 py-3 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-colors shadow-lg"
                         >
@@ -107,9 +107,9 @@ export default function Landing() {
                             <span className="font-semibold">Mini App</span>
                         </a>
 
-                        <a 
-                            href="https://t.me/boost/FaceSwapVideoAi" 
-                            target="_blank" 
+                        <a
+                            href="https://t.me/boost/FaceSwapVideoAi"
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-colors shadow-lg"
                         >
