@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 const api = axios.create({
     baseURL: process.env.REACT_APP_BACKEND_URL || '',
@@ -25,20 +26,38 @@ export default function CreateNew() {
     const [textInput, setTextInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [uploadedUrl, setUploadedUrl] = useState(null);
+    const [credits, setCredits] = useState(0);
+    const [creations, setCreations] = useState([]);
     const { user } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {
         if (user) {
             loadCatalog();
+            // Load dashboard data
+            loadDashboardData();
         }
     }, [user]);
+
+    const loadDashboardData = async () => {
+        try {
+            // Load credits
+            const creditsRes = await api.get('/api/web/credits');
+            setCredits(creditsRes.data.balance);
+
+            // Load recent creations
+            const creationsRes = await api.get('/api/web/creations');
+            setCreations(creationsRes.data.items || []);
+        } catch (err) {
+            console.error('Failed to load dashboard data:', err);
+        }
+    };
 
     const loadCatalog = async () => {
         try {
             const { data } = await api.get('/api/web/tool-catalog');
             setCatalog(data);
-            
+
             // Auto-select first tool in first category with items
             const categories = ['image', 'video', 'voice', 'content', 'bundle'];
             for (const cat of categories) {
@@ -56,15 +75,15 @@ export default function CreateNew() {
     const handleFileUpload = async (e) => {
         const uploadedFile = e.target.files[0];
         if (!uploadedFile) return;
-        
+
         setFile(uploadedFile);
         setLoading(true);
-        
+
         try {
             const formData = new FormData();
             formData.append('file', uploadedFile);
             formData.append('type', selectedTool?.sku_code || 'general');
-            
+
             const { data } = await api.post('/api/web/upload', formData);
             setUploadedUrl(data.url);
             setLoading(false);
@@ -77,35 +96,35 @@ export default function CreateNew() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedTool || !user) return;
-        
+
         // Check if required inputs are provided
         const requiresImage = selectedTool.inputs.includes('image');
         const requiresText = selectedTool.inputs.includes('text');
         const requiresPrompt = selectedTool.inputs.includes('prompt');
-        
+
         if (requiresImage && !uploadedUrl) {
             alert('Please upload an image first');
             return;
         }
-        
+
         if (requiresText && !textInput) {
             alert('Please provide text input');
             return;
         }
-        
+
         setLoading(true);
         try {
             const options = {};
             if (requiresPrompt && prompt) options.prompt = prompt;
             if (negativePrompt) options.negative_prompt = negativePrompt;
             if (requiresText) options.text = textInput;
-            
+
             const { data } = await api.post('/api/web/process', {
                 sku_code: selectedTool.sku_code,
                 media_url: uploadedUrl,
                 options
             });
-            
+
             navigate(`/status?id=${data.job_id}`);
         } catch (err) {
             alert('Creation failed: ' + err.message);
@@ -166,7 +185,23 @@ export default function CreateNew() {
                 <div className="mb-8">
                     <h1 className="text-3xl sm:text-4xl font-bold mb-2">FaceShot ChopShop</h1>
                     <p className="text-gray-600">Professional AI tools for creators and agencies</p>
-                    
+
+                    {/* User Info Section */}
+                    <div className="mt-6 bg-white rounded-lg shadow-sm p-4">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-lg font-semibold">Welcome, {user?.email}</h2>
+                                <p className="text-gray-600">Credits: <span className="font-mono font-bold text-blue-600">{credits}</span></p>
+                            </div>
+                            <Link
+                                to="/status"
+                                className="text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                                View Status →
+                            </Link>
+                        </div>
+                    </div>
+
                     {catalog.user_plan && (
                         <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div className="flex justify-between items-center">
@@ -182,6 +217,46 @@ export default function CreateNew() {
                             </div>
                         </div>
                     )}
+
+                    {/* Recent Creations Section */}
+                    {creations.length > 0 && (
+                        <div className="mt-6">
+                            <h3 className="text-lg font-semibold mb-4">Recent Creations</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {creations.slice(0, 8).map(item => (
+                                    <div key={item.id} className="border rounded overflow-hidden">
+                                        {item.url ? (
+                                            item.type === 'img2vid' || item.url.endsWith('.mp4') ? (
+                                                <video src={item.url} controls className="w-full h-32 object-cover" />
+                                            ) : (
+                                                <img src={item.url} alt={item.type} className="w-full h-32 object-cover" />
+                                            )
+                                        ) : (
+                                            <div className="w-full h-32 bg-gray-100 flex items-center justify-center text-gray-400">
+                                                {item.status}
+                                            </div>
+                                        )}
+                                        <div className="p-2 text-sm bg-gray-50 flex justify-between">
+                                            <span className="capitalize">{item.type}</span>
+                                            <span className={item.status === 'completed' ? 'text-green-600' : 'text-orange-500'}>
+                                                {item.status}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {creations.length > 8 && (
+                                <div className="text-center mt-4">
+                                    <Link
+                                        to="/status"
+                                        className="text-blue-600 hover:text-blue-700 font-medium"
+                                    >
+                                        View All Creations ({creations.length} total)
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -193,7 +268,7 @@ export default function CreateNew() {
                                 {Object.keys(categoryNames).map(cat => {
                                     const toolCount = catalog.categories[cat]?.length || 0;
                                     if (toolCount === 0) return null;
-                                    
+
                                     return (
                                         <button
                                             key={cat}
@@ -203,11 +278,10 @@ export default function CreateNew() {
                                                     selectTool(catalog.categories[cat][0]);
                                                 }
                                             }}
-                                            className={`w-full text-left px-4 py-3 rounded-lg transition ${
-                                                selectedCategory === cat
+                                            className={`w-full text-left px-4 py-3 rounded-lg transition ${selectedCategory === cat
                                                     ? 'bg-blue-600 text-white'
                                                     : 'bg-gray-100 hover:bg-gray-200'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="font-medium">{categoryNames[cat]}</div>
                                             <div className={`text-sm ${selectedCategory === cat ? 'text-blue-100' : 'text-gray-500'}`}>
@@ -230,11 +304,10 @@ export default function CreateNew() {
                                     <button
                                         key={tool.sku_code}
                                         onClick={() => selectTool(tool)}
-                                        className={`text-left p-4 rounded-lg border-2 transition ${
-                                            selectedTool?.sku_code === tool.sku_code
+                                        className={`text-left p-4 rounded-lg border-2 transition ${selectedTool?.sku_code === tool.sku_code
                                                 ? 'border-blue-600 bg-blue-50'
                                                 : 'border-gray-200 hover:border-blue-300'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex items-start justify-between mb-2">
                                             <span className="text-2xl">{tool.icon}</span>

@@ -21,7 +21,6 @@ export function Header() {
                 <Link to="/faqs" className="hover:underline">FAQs</Link>
                 {user ? (
                     <>
-                        <Link to="/dashboard" className="hover:underline">Dashboard</Link>
                         <Link to="/create" className="hover:underline">Create</Link>
                         <span className="font-mono bg-gray-100 px-2 py-1 rounded">
                             {credits} pts

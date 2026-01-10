@@ -18,7 +18,7 @@ export default function Auth({ type }) {
             } else {
                 await signup(email, password);
             }
-            navigate('/dashboard');
+            navigate('/create');
         } catch (err) {
             setError(err.response?.data?.error || 'Authentication failed');
         }
@@ -28,7 +28,7 @@ export default function Auth({ type }) {
         <div className="min-h-[80vh] flex items-center justify-center p-4">
             <div className="w-full max-w-md border p-8 rounded-lg shadow-sm">
                 <h1 className="text-2xl font-bold mb-6 text-center capitalize">{type}</h1>
-                
+
                 {error && (
                     <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm">
                         {error}
