@@ -11,8 +11,16 @@ services:
         value: 10000
       - key: NODE_ENV
         value: production
+      - key: DB_PATH
+        sync: false
       - key: JWT_SECRET
         generateValue: true
+      - key: ADMIN_SECRET
+        sync: false
+      - key: A2E_API_KEY
+        sync: false
+      - key: A2E_BASE_URL
+        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -23,11 +31,21 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: COST_PER_CREDIT
+        sync: false
+      - key: MIN_MARGIN
+        sync: false
+      - key: MAX_JOB_SECONDS
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: REACT_APP_BACKEND_URL
-        sync: false
-      - key: A2E_API_KEY
-        sync: false
-      - key: A2E_BASE_URL
+      - key: LOG_LEVEL
+        value: info
+      - key: SUPPORTED_CURRENCIES
+        value: usd,eur,gbp,mxn,cad,aud,jpy,cny,inr,brl,chf,sek,nok,dkk,pln,czk,huf,ron,bgn,hrk,rub,try,zar,sgd,hkd,nzd,krw,thb,myr,php,idr,vnd,twd,ars,clp,cop,pen,uyu
+      - key: DEFAULT_CURRENCY
+        value: mxn
+      - key: ADMIN_EMAILS
         sync: false

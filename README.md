@@ -42,62 +42,56 @@ See [`spec.md`](./spec.md) for complete technical specification.
 
 ## Environment Variables
 
-### Core Configuration
+### Required Environment Variables
 ```env
-# Server
+# Server Configuration
 PORT=3000
 NODE_ENV=production
-DB_PATH=/var/data/production.db  # Required in production - never use default paths
-PUBLIC_URL=https://your-backend.onrender.com
-FRONTEND_URL=https://your-frontend.onrender.com
-LOG_LEVEL=info
-```
+DB_PATH=/var/data/production.db
 
-### Authentication
-```env
-# JWT Secret (generate with: openssl rand -hex 32)
+# Authentication
 JWT_SECRET=your_jwt_secret_here
-```
 
-### A2E API Integration (Phase 0-1)
-```env
-# A2E API credentials
+# Admin Access
+ADMIN_SECRET=your_admin_secret_here
+
+# A2E API Integration
 A2E_API_KEY=your_a2e_api_key_here
 A2E_BASE_URL=https://video.a2e.ai
-```
 
-### Stripe Payments
-```env
-# Stripe API keys (test or live)
+# Stripe Payments
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-```
 
-### File Upload (Cloudinary)
-```env
+# File Upload (Cloudinary)
 CLOUDINARY_CLOUD_NAME=your_cloudinary_name
 CLOUDINARY_API_KEY=your_cloudinary_key
 CLOUDINARY_API_SECRET=your_cloudinary_secret
-```
 
-### Admin
-```env
-ADMIN_SECRET=your_admin_secret_here
-```
-
-### Pricing System (Phase 2)
-```env
-# Cost per A2E credit (based on A2E Pro subscription: $19.99/1800 credits)
+# Pricing System
 COST_PER_CREDIT=0.0111
-
-# Minimum margin percentage (0.40 = 40%)
 MIN_MARGIN=0.40
-
-# Maximum job duration in seconds
 MAX_JOB_SECONDS=5000
 ```
 
-**Important**: When `NODE_ENV=production`, the application will validate that no environment variables are set to their placeholder values (e.g., `your_jwt_secret_here`). Replace all placeholders with actual values before deploying to production.
+### Optional Environment Variables (with defaults)
+```env
+# URLs
+PUBLIC_URL=https://your-backend.onrender.com
+FRONTEND_URL=https://your-frontend.onrender.com
+
+# Logging
+LOG_LEVEL=info
+
+# Multi-Currency Support
+SUPPORTED_CURRENCIES=usd,eur,gbp,mxn,cad,aud,jpy,cny,inr,brl,chf,sek,nok,dkk,pln,czk,huf,ron,bgn,hrk,rub,try,zar,sgd,hkd,nzd,krw,thb,myr,php,idr,vnd,twd,ars,clp,cop,pen,uyu
+DEFAULT_CURRENCY=mxn
+
+# Admin Emails (comma-separated)
+ADMIN_EMAILS=admin@example.com
+```
+
+**Important**: When `NODE_ENV=production`, the application will validate that all required environment variables are set and not using placeholder values. The app will fail to start with clear error messages if configuration is invalid.
 
 ## Installation
 
