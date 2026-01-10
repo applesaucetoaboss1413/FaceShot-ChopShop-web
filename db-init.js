@@ -5,21 +5,17 @@
  * Sets up MongoDB indexes and seed data
  */
 
-const { connectDB, getCollections } = require('./db/mongoClient');
+const { connectDB } = require('./db/mongoClient');
+const { Vector, Plan, Flag, Sku, Stats } = require('./FaceShot-ChopShop-web/models.js');
 
 async function initializeDatabase() {
     try {
-        // Connect to MongoDB
-        await connectDB();
-        console.log('✅ Connected to MongoDB');
-
-        const {
-            Vector,
-            Plan,
-            Flag,
-            Sku,
-            Stats
-        } = getCollections();
+        // Connection should already be established when called from index.js
+        // Only connect if running standalone
+        if (require.main === module) {
+            await connectDB();
+            console.log('✅ Connected to MongoDB');
+        }
 
         const now = new Date();
 
