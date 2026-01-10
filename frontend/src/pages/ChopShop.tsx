@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { displayCredits } from '@/lib/priceConverter';
 
 // Tool Categories - matches backend SKU catalog
 const categories = [
@@ -499,8 +500,8 @@ export default function ChopShop() {
                             setSelectedTool(null);
                           }}
                           className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${selectedCategory === cat.id
-                              ? 'bg-primary text-primary-foreground'
-                              : 'hover:bg-muted'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'hover:bg-muted'
                             }`}
                         >
                           <div className="flex items-center gap-3">
@@ -510,8 +511,8 @@ export default function ChopShop() {
                             <span className="font-medium">{cat.name}</span>
                           </div>
                           <span className={`text-xs px-2 py-1 rounded-full ${selectedCategory === cat.id
-                              ? 'bg-primary-foreground/20'
-                              : 'bg-muted'
+                            ? 'bg-primary-foreground/20'
+                            : 'bg-muted'
                             }`}>
                             {toolCount}
                           </span>
@@ -528,8 +529,8 @@ export default function ChopShop() {
                     <button
                       onClick={() => setMode('simple')}
                       className={`p-3 rounded-lg text-sm font-medium transition-all ${mode === 'simple'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/70'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted hover:bg-muted/70'
                         }`}
                     >
                       🎯 Simple Mode
@@ -538,8 +539,8 @@ export default function ChopShop() {
                     <button
                       onClick={() => setMode('advanced')}
                       className={`p-3 rounded-lg text-sm font-medium transition-all ${mode === 'advanced'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/70'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted hover:bg-muted/70'
                         }`}
                     >
                       ⚙️ Advanced Mode
@@ -562,8 +563,8 @@ export default function ChopShop() {
                         key={tool.sku_code}
                         onClick={() => setSelectedTool(tool)}
                         className={`p-4 rounded-xl border-2 transition-all text-left ${selectedTool?.sku_code === tool.sku_code
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border hover:border-primary/30'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/30'
                           }`}
                       >
                         <div className="text-3xl mb-2">{tool.icon}</div>
@@ -573,9 +574,9 @@ export default function ChopShop() {
                         </div>
                         <div className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-1">
-                            <DollarSign className="w-3 h-3 text-primary" />
+                            <Coins className="w-3 h-3 text-primary" />
                             <span className="text-primary font-medium">
-                              ${tool.base_price_usd}
+                              {displayCredits(tool.base_credits || Math.round(parseFloat(tool.base_price_usd) * 100))}
                             </span>
                           </div>
                           <span className="text-muted-foreground">{tool.sku_code}</span>
