@@ -11,8 +11,10 @@ services:
         value: 10000
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
+      - key: MONGODB_URI
         sync: false
+      - key: MONGODB_DB_NAME
+        value: faceshot_chopshop
       - key: JWT_SECRET
         generateValue: true
       - key: ADMIN_SECRET
