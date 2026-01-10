@@ -91,6 +91,7 @@ module.exports = {
     costPerCredit: parseFloat(process.env.COST_PER_CREDIT),
     minMargin: parseFloat(process.env.MIN_MARGIN),
     maxJobSeconds: parseInt(process.env.MAX_JOB_SECONDS),
+    signupFreeCredits: parseInt(process.env.SIGNUP_FREE_CREDITS || '5'),
     adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim())
 };
 

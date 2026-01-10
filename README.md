@@ -21,6 +21,15 @@ A dual-layer AI media processing SaaS platform combining A2E API integration wit
 
 See [`spec.md`](./spec.md) for complete technical specification.
 
+## Features
+
+### Free Signup Credits
+New users automatically receive free credits upon signup to encourage platform adoption:
+- **Default**: 5 free credits per new user
+- **Configurable**: Set `SIGNUP_FREE_CREDITS` environment variable to customize
+- **Logged**: Signup events with free credits are logged for analytics
+- **Immediate Access**: Users can start creating immediately without payment
+
 ## Tech Stack
 
 ### Backend
@@ -89,6 +98,9 @@ DEFAULT_CURRENCY=mxn
 
 # Admin Emails (comma-separated)
 ADMIN_EMAILS=admin@example.com
+
+# Free Signup Credits
+SIGNUP_FREE_CREDITS=5
 ```
 
 **Important**: When `NODE_ENV=production`, the application will validate that all required environment variables are set and not using placeholder values. The app will fail to start with clear error messages if configuration is invalid.

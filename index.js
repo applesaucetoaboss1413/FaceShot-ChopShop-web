@@ -568,7 +568,7 @@ app.get('/stats', (req, res) => {
 
 app.post('/api/auth/signup', async (req, res) => {
     try {
-        const { email, password } = req.body
+        const { email, password, source } = req.body
         if (!email || !password) return res.status(400).json({ error: 'missing_fields' })
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -582,7 +582,8 @@ app.post('/api/auth/signup', async (req, res) => {
         const result = db.prepare('INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)').run(email, passwordHash, new Date().toISOString())
         const userId = result.lastInsertRowid
 
-        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, 0)
+        db.prepare('INSERT INTO user_credits (user_id, balance) VALUES (?, ?)').run(userId, config.signupFreeCredits)
+        logger.info({ msg: 'user_signup_with_free_credits', user_id: userId, credits: config.signupFreeCredits, source: source || 'unknown' })
         const token = jwt.sign({ id: userId }, config.jwtSecret, { expiresIn: '30d' })
 
         res.status(201).json({ token, user: { id: userId, email } })
