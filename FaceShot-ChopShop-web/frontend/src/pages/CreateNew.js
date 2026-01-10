@@ -54,7 +54,9 @@ export default function CreateNew() {
 
     const loadCatalog = async () => {
         try {
+            console.log('Loading catalog...');
             const { data } = await api.get('/api/web/catalog');
+            console.log('Catalog data received:', data);
             setCatalog(data);
 
             // Auto-select first tool in first category with items
@@ -63,11 +65,13 @@ export default function CreateNew() {
                 if (data.categories[cat] && data.categories[cat].length > 0) {
                     setSelectedCategory(cat);
                     setSelectedTool(data.categories[cat][0]);
+                    console.log('Auto-selected category:', cat, 'tool:', data.categories[cat][0]);
                     break;
                 }
             }
         } catch (err) {
             console.error('Failed to load catalog:', err);
+            console.error('Error details:', err.response?.data || err.message);
         }
     };
 
@@ -160,7 +164,10 @@ export default function CreateNew() {
     if (!catalog) {
         return (
             <div className="p-8 max-w-4xl mx-auto">
-                <div className="text-center">Loading tools...</div>
+                <div className="text-center">
+                    <div className="text-lg">Loading tools...</div>
+                    <div className="text-sm text-gray-500 mt-2">Debug: Check browser console for catalog loading errors</div>
+                </div>
             </div>
         );
     }
