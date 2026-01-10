@@ -411,6 +411,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 })
 
 app.get('/api/web/catalog', (req, res) => {
+    console.log('Catalog endpoint called');
+    console.log('Catalog config:', catalogConfig);
+
     // Transform flat catalog array into categorized structure
     const categorized = {
         categories: {
@@ -422,6 +425,11 @@ app.get('/api/web/catalog', (req, res) => {
         },
         user_plan: null // Will be populated based on user data if needed
     };
+
+    if (!catalogConfig || !catalogConfig.catalog) {
+        console.error('Catalog config not found');
+        return res.status(500).json({ error: 'catalog_config_missing' });
+    }
 
     catalogConfig.catalog.forEach(item => {
         if (categorized.categories[item.category]) {
@@ -441,7 +449,14 @@ app.get('/api/web/catalog', (req, res) => {
         }
     });
 
+    console.log('Returning catalog:', categorized);
     res.json(categorized);
+})
+
+// Test endpoint
+app.get('/api/web/test', (req, res) => {
+    console.log('Test endpoint called');
+    res.json({ message: 'API is working', timestamp: new Date().toISOString() });
 })
 
 app.get('/api/web/packs', (req, res) => {
