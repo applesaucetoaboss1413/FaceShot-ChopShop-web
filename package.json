@@ -2,9 +2,9 @@
   "name": "faceshot-chopshop",
   "version": "1.0.0",
   "description": "Backend server for FaceShot-ChopShop",
-  "main": "index.js",
+  "main": "FaceShot-ChopShop-web/index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node FaceShot-ChopShop-web/index.js",
     "build": "npm install && cd frontend && npm install && npm run build",
     "render-build": "npm run build",
     "test": "mocha tests/*.test.js --timeout 10000"
