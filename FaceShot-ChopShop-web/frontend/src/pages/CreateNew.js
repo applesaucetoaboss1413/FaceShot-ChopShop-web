@@ -54,7 +54,7 @@ export default function CreateNew() {
 
     const loadCatalog = async () => {
         try {
-            const { data } = await api.get('/api/web/tool-catalog');
+            const { data } = await api.get('/api/web/catalog');
             setCatalog(data);
 
             // Auto-select first tool in first category with items

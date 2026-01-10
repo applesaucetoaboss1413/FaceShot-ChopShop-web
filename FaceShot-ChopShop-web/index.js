@@ -406,7 +406,37 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 })
 
 app.get('/api/web/catalog', (req, res) => {
-    res.json(catalogConfig.catalog)
+    // Transform flat catalog array into categorized structure
+    const categorized = {
+        categories: {
+            image: [],
+            video: [],
+            voice: [],
+            content: [],
+            bundle: []
+        },
+        user_plan: null // Will be populated based on user data if needed
+    };
+
+    catalogConfig.catalog.forEach(item => {
+        if (categorized.categories[item.category]) {
+            categorized.categories[item.category].push({
+                sku_code: item.key,
+                display_name: item.name,
+                name: item.name,
+                description: item.description,
+                category: item.category,
+                base_price_usd: item.basePrice / 100, // Convert cents to dollars
+                base_credits: Math.ceil(item.basePrice / 100), // Rough credit conversion
+                icon: item.icon,
+                vector_name: item.key,
+                inputs: ['image'], // Default input type, can be customized per item
+                ...item // Include any other properties
+            });
+        }
+    });
+
+    res.json(categorized);
 })
 
 app.get('/api/web/packs', (req, res) => {
