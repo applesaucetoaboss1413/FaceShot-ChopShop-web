@@ -7,6 +7,7 @@
 const winston = require('winston');
 const A2EServiceEnhanced = require('./a2e-enhanced');
 const SKUConfigManager = require('./sku-config-manager');
+const db = require('../db/mongo');
 
 const logger = winston.createLogger({
     level: process.env.LOG_LEVEL || 'info',
@@ -18,10 +19,9 @@ const logger = winston.createLogger({
 });
 
 class JobProcessor {
-    constructor(db, apiKey, baseURL) {
-        this.db = db;
-        this.a2eService = new A2EServiceEnhanced(apiKey, baseURL, db);
-        this.configManager = new SKUConfigManager(db);
+    constructor(apiKey, baseURL) {
+        this.a2eService = new A2EServiceEnhanced(apiKey, baseURL);
+        this.configManager = new SKUConfigManager();
         this.activeJobs = new Map();
         this.pollingInterval = 10000; // 10 seconds
     }
@@ -30,39 +30,29 @@ class JobProcessor {
      * Create and start a new job
      */
     async createJob(userId, orderId, skuCode, customerInputs) {
-        const now = new Date().toISOString();
-
         // Validate inputs
-        const validation = this.configManager.validateCustomerInputs(skuCode, customerInputs);
+        const validation = await this.configManager.validateCustomerInputs(skuCode, customerInputs);
         if (!validation.valid) {
             throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
         }
 
         // Get configuration
-        const config = this.configManager.getConfig(skuCode);
+        const config = await this.configManager.getConfig(skuCode);
         if (!config) {
             throw new Error(`No configuration found for SKU: ${skuCode}`);
         }
 
         // Calculate estimated credits
-        const sku = this.db.prepare('SELECT base_credits FROM skus WHERE code = ?').get(skuCode);
+        const sku = await db.getSkuByCode(skuCode);
         const estimatedCredits = sku ? sku.base_credits : 0;
 
         // Create job record
-        const jobResult = this.db.prepare(`
-            INSERT INTO jobs (
-                user_id, type, status, cost_credits, order_id, created_at, updated_at
-            ) VALUES (?, ?, 'pending', ?, ?, ?, ?)
-        `).run(
-            userId,
-            skuCode,
-            estimatedCredits,
-            orderId,
-            now,
-            now
-        );
+        const job = await db.createJob(userId, skuCode, null, {
+            order_id: orderId,
+            cost_credits: estimatedCredits
+        });
 
-        const jobId = jobResult.lastInsertRowid;
+        const jobId = job.id;
 
         logger.info('Job created', { jobId, userId, skuCode, orderId });
 
@@ -79,12 +69,9 @@ class JobProcessor {
      * Execute job steps sequentially
      */
     async executeJob(jobId, config, customerInputs) {
-        const now = new Date().toISOString();
-
         try {
             // Update job status
-            this.db.prepare('UPDATE jobs SET status = ?, updated_at = ? WHERE id = ?')
-                .run('processing', now, jobId);
+            await db.updateJob(jobId, { status: 'processing' });
 
             const results = [];
 
@@ -104,17 +91,15 @@ class JobProcessor {
             const resultUrl = finalResult ? finalResult.result_url : null;
 
             // Mark job as completed
-            this.db.prepare(`
-                UPDATE jobs 
-                SET status = 'completed', result_url = ?, updated_at = ? 
-                WHERE id = ?
-            `).run(resultUrl, new Date().toISOString(), jobId);
+            await db.updateJob(jobId, {
+                status: 'completed',
+                result_url: resultUrl
+            });
 
             // Update order status
-            const job = this.db.prepare('SELECT order_id FROM jobs WHERE id = ?').get(jobId);
+            const job = await db.getJob(jobId);
             if (job && job.order_id) {
-                this.db.prepare('UPDATE orders SET status = ? WHERE id = ?')
-                    .run('completed', job.order_id);
+                await db.updateOrderStatus(job.order_id, 'completed');
             }
 
             logger.info('Job completed successfully', { jobId, resultUrl });

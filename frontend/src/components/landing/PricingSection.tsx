@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, PricingPlan, SKU } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { displayCredits } from '@/lib/priceConverter';
 
 const planFeatures: Record<string, string[]> = {
   starter: [
@@ -61,7 +62,7 @@ export function PricingSection() {
 
       // Load hero bundles (V7 vector - Multi-Modal Bundles)
       const skusResult = await api.getSKUs('v7');
-      
+
       if (!isMounted) return;
 
       if (skusResult.success && skusResult.data) {
@@ -116,7 +117,7 @@ export function PricingSection() {
   return (
     <section id="pricing" className="py-24 relative">
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent" />
-      
+
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-16">
           <motion.span
@@ -165,58 +166,58 @@ export function PricingSection() {
             const isPopular = index === 1 || codeKey === 'pro';
 
             return (
-            <motion.div
-              key={plan.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
-              className={`relative glass-card p-8 ${
-                isPopular 
-                  ? 'border-primary/50 shadow-glow scale-105 md:scale-110' 
+              <motion.div
+                key={plan.name}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                className={`relative glass-card p-8 ${isPopular
+                  ? 'border-primary/50 shadow-glow scale-105 md:scale-110'
                   : ''
-              }`}
-            >
-              {isPopular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                    <Zap className="w-3 h-3" />
-                    Most Popular
-                  </span>
-                </div>
-              )}
+                  }`}
+              >
+                {isPopular && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                      <Zap className="w-3 h-3" />
+                      Most Popular
+                    </span>
+                  </div>
+                )}
 
-              <div className="text-center mb-6">
-                <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
-                <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-4xl font-bold">${plan.monthlyPriceUsd.toFixed(2)}</span>
-                  <span className="text-muted-foreground">per month</span>
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-bold mb-2">{plan.name}</h3>
+                  <p className="text-muted-foreground text-sm mb-4">{plan.description}</p>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-4xl font-bold">{displayCredits(plan.monthlyPriceUsd * 100)}</span>
+                    <span className="text-muted-foreground">per month</span>
+                  </div>
+                  <div className="text-primary font-semibold mt-1">
+                    Includes approximately {(plan.includedSeconds / 60).toFixed(0)} minutes
+                  </div>
                 </div>
-                <div className="text-primary font-semibold mt-1">
-                  Includes approximately {(plan.includedSeconds / 60).toFixed(0)} minutes
-                </div>
-              </div>
 
-              <ul className="space-y-3 mb-8">
-                {features.map((feature) => (
+                <ul className="space-y-3 mb-8">
+                  {features.map((feature) => (
                     <li key={feature} className="flex items-center gap-2">
                       <Check className="w-5 h-5 text-primary flex-shrink-0" />
                       <span className="text-sm text-muted-foreground">{feature}</span>
                     </li>
                   ))}
-              </ul>
+                </ul>
 
-              <Button 
-                variant={isPopular ? 'hero' : 'outline'} 
-                className="w-full"
-                onClick={() => handleCheckout(plan)}
-                disabled={activePlanId === plan.id}
-              >
-                {activePlanId === plan.id ? 'Redirecting to checkout...' : isAuthenticated ? 'Subscribe' : 'Get Started'}
-              </Button>
-            </motion.div>
-          )})}
+                <Button
+                  variant={isPopular ? 'hero' : 'outline'}
+                  className="w-full"
+                  onClick={() => handleCheckout(plan)}
+                  disabled={activePlanId === plan.id}
+                >
+                  {activePlanId === plan.id ? 'Redirecting to checkout...' : isAuthenticated ? 'Subscribe' : 'Get Started'}
+                </Button>
+              </motion.div>
+            )
+          })}
         </div>
 
         <motion.p

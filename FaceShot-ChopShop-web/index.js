@@ -15,7 +15,8 @@ const fs = require('fs')
 dotenv.config()
 
 // MongoDB setup
-const dbHelper = require('./db-helper')
+const { connectDB } = require('../db/mongoClient')
+const db = require('../db/mongo')
 const { ProcessedEvent } = require('./models')
 
 const logger = winston.createLogger({
@@ -118,11 +119,11 @@ const authenticateToken = (req, res, next) => {
 }
 
 const addCredits = async (userId, amount) => {
-    return await dbHelper.addCredits(userId, amount)
+    return await db.addCredits(userId, amount)
 }
 
 const deductCredits = async (userId, amount) => {
-    return await dbHelper.deductCredits(userId, amount)
+    return await db.deductCredits(userId, amount)
 }
 
 app.post('/webhook/stripe', async (req, res) => {
@@ -184,7 +185,7 @@ app.post('/webhook/stripe', async (req, res) => {
             }
 
             // Process the payment
-            await dbHelper.createPurchase(user_id, session.id, session.amount_total, Number(points))
+            await db.createPurchase(user_id, session.id, session.amount_total, Number(points))
             await addCredits(user_id, Number(points))
 
             // Mark as processed
@@ -255,7 +256,7 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             if (currentStatus === 'completed' || currentStatus === 'success') {
                 const resultUrl = status.data.result_url || status.data.video_url || status.data.media_url || ''
 
-                await dbHelper.updateJob(jobId, {
+                await db.updateJob(jobId, {
                     status: 'completed',
                     result_url: resultUrl
                 })
@@ -266,12 +267,12 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             } else if (currentStatus === 'failed' || currentStatus === 'error') {
                 const errorMessage = status.data.failed_message || status.data.error_message || 'Unknown error'
 
-                const job = await dbHelper.getJob(jobId)
+                const job = await db.getJob(jobId)
                 if (job && job.credits_used > 0) {
-                    await dbHelper.addCredits(job.user_id, job.credits_used)
+                    await db.addCredits(job.user_id, job.credits_used)
                 }
 
-                await dbHelper.updateJob(jobId, {
+                await db.updateJob(jobId, {
                     status: 'failed',
                     error: errorMessage
                 })
@@ -302,7 +303,7 @@ app.get('/alive', (req, res) => {
 
 app.get('/stats', async (req, res) => {
     try {
-        const stats = await dbHelper.getStats()
+        const stats = await db.getStats()
         const totalUsers = stats.total_users || 0
         // Note: paying_users and revenue would need purchases to be aggregated
         res.json({
@@ -334,13 +335,13 @@ app.post('/api/auth/signup', async (req, res) => {
             return res.status(400).json({ error: 'password_too_short' })
         }
 
-        const existing = await dbHelper.getUserByEmail(email)
+        const existing = await db.getUserByEmail(email)
         if (existing) {
             return res.status(409).json({ error: 'email_exists' })
         }
 
         const passwordHash = await bcrypt.hash(password, 10)
-        const user = await dbHelper.createUser(email, passwordHash)
+        const user = await db.createUser(email, passwordHash)
 
         const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
 
@@ -365,7 +366,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
 
-        const user = await dbHelper.getUserByEmail(email)
+        const user = await db.getUserByEmail(email)
         if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
@@ -393,7 +394,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
     try {
-        const user = await dbHelper.getUserById(req.user.id)
+        const user = await db.getUserById(req.user.id)
         if (!user) {
             return res.status(401).json({ error: 'unauthorized' })
         }
@@ -446,7 +447,7 @@ app.post('/api/web/checkout', authenticateToken, async (req, res) => {
 
 app.get('/api/web/credits', authenticateToken, async (req, res) => {
     try {
-        const credits = await dbHelper.getCredits(req.user.id)
+        const credits = await db.getCredits(req.user.id)
         res.json({ balance: credits.balance })
     } catch (e) {
         logger.error({ msg: 'credits_error', error: String(e) })
@@ -456,7 +457,7 @@ app.get('/api/web/credits', authenticateToken, async (req, res) => {
 
 app.get('/api/web/creations', authenticateToken, async (req, res) => {
     try {
-        const jobs = await dbHelper.getUserJobs(req.user.id, 20)
+        const jobs = await db.getUserJobs(req.user.id, 20)
         res.json({ items: jobs })
     } catch (e) {
         logger.error({ msg: 'creations_error', error: String(e) })
@@ -476,7 +477,7 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
         }
 
         // Create job with source_url for the upload using MongoDB
-        const job = await dbHelper.createJob(req.user.id, type, url, { uploaded: true })
+        const job = await db.createJob(req.user.id, type, url, { uploaded: true })
 
         res.json({ status: 'uploaded', url, job_id: job.id })
     } catch (e) {
@@ -491,7 +492,7 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
 
         // Check credits using MongoDB
-        const creditData = await dbHelper.getCredits(req.user.id)
+        const creditData = await db.getCredits(req.user.id)
         if (!creditData || creditData.balance < 10) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
@@ -527,13 +528,13 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
 
         // Deduct credits using MongoDB
         try {
-            await dbHelper.deductCredits(req.user.id, costCredits)
+            await db.deductCredits(req.user.id, costCredits)
         } catch (error) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
 
         // Update the job with a2e task info using MongoDB
-        await dbHelper.updateJob(upload._id.toString(), {
+        await db.updateJob(upload._id.toString(), {
             status: 'processing',
             a2e_task_id: taskId,
             credits_used: costCredits
@@ -557,7 +558,7 @@ app.get('/api/web/status', async (req, res) => {
         }
 
         // MongoDB uses string IDs (ObjectId)
-        const job = await dbHelper.getJob(id)
+        const job = await db.getJob(id)
         if (!job) {
             return res.status(404).json({ error: 'not_found', message: 'Job not found' })
         }
@@ -601,7 +602,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Initialize MongoDB and start server
-dbHelper.connect(process.env.MONGODB_URI)
+connectDB()
     .then(() => {
         app.listen(port, () => {
             logger.info({ msg: 'server_started', port, database: 'MongoDB Atlas' })

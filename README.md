@@ -7,6 +7,7 @@ A dual-layer AI media processing SaaS platform combining A2E API integration wit
 ## Quick Start
 
 ### Deploy to Production (20 minutes)
+
 1. **Preview**: Click Preview button to test
 2. **Deploy**: Click Deploy button
 3. **Configure**: See [`PRE_DEPLOYMENT_CHECKLIST.md`](./PRE_DEPLOYMENT_CHECKLIST.md)
@@ -24,7 +25,9 @@ See [`spec.md`](./spec.md) for complete technical specification.
 ## Features
 
 ### Free Signup Credits
+
 New users automatically receive free credits upon signup to encourage platform adoption:
+
 - **Default**: 5 free credits per new user
 - **Configurable**: Set `SIGNUP_FREE_CREDITS` environment variable to customize
 - **Logged**: Signup events with free credits are logged for analytics
@@ -33,14 +36,16 @@ New users automatically receive free credits upon signup to encourage platform a
 ## Tech Stack
 
 ### Backend
+
 - Node.js (>=20.0.0) + Express.js
-- SQLite via better-sqlite3
+- MongoDB Atlas with Mongoose ODM
 - JWT authentication with bcrypt
 - Stripe payments
 - A2E API integration
 - Cloudinary file storage
 
 ### Frontend
+
 - **Vite** (Fast build tool)
 - **React 18.3** with TypeScript
 - **shadcn/ui** component library
@@ -52,11 +57,15 @@ New users automatically receive free credits upon signup to encourage platform a
 ## Environment Variables
 
 ### Required Environment Variables
+
 ```env
 # Server Configuration
 PORT=3000
 NODE_ENV=production
-DB_PATH=/var/data/production.db
+
+# MongoDB Atlas Configuration
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
+MONGODB_DB_NAME=faceshot_chopshop
 
 # Authentication
 JWT_SECRET=your_jwt_secret_here
@@ -84,6 +93,7 @@ MAX_JOB_SECONDS=5000
 ```
 
 ### Optional Environment Variables (with defaults)
+
 ```env
 # URLs
 PUBLIC_URL=https://your-backend.onrender.com
@@ -107,12 +117,14 @@ SIGNUP_FREE_CREDITS=5
 
 ## Installation
 
-### Backend
+### Backend Installation
+
 ```bash
 npm install
 ```
 
-### Frontend
+### Frontend Installation
+
 ```bash
 cd frontend
 npm install
@@ -121,16 +133,20 @@ npm install
 ## Development
 
 ### Start Backend (Development)
+
 ```bash
 npm start
 ```
+
 Server runs on `http://localhost:3000`
 
 ### Start Frontend (Development)
+
 ```bash
 cd frontend
 npm run dev
 ```
+
 Frontend runs on `http://localhost:8080` with hot reload
 
 **Note**: The frontend automatically proxies API requests to the backend during development.
@@ -142,6 +158,7 @@ Frontend runs on `http://localhost:8080` with hot reload
 All deployment configurations use the same standardized commands:
 
 #### Frontend Build Process
+
 ```bash
 # Install backend dependencies
 npm install
@@ -149,134 +166,170 @@ npm install
 # Install frontend dependencies and build
 cd frontend && npm install && npm run build
 ```
+
 **Result**: Creates `frontend/dist/` directory with optimized production build
 
 #### Backend Start Process
+
 ```bash
 # Serve built frontend + API
 NODE_ENV=production node index.js
 ```
+
 **Behavior**: Express serves static files from `frontend/dist/` and handles API routes
 
 ### Platform-Specific Configurations
 
 #### Local Development
+
 ```bash
 # Start backend (serves built frontend)
 npm start
 ```
 
 #### Docker
+
 ```bash
 # Build and run
 docker-compose up --build
 ```
 
 #### Render
+
 - **Build Command**: `npm install && cd frontend && npm install && npm run build`
 - **Start Command**: `NODE_ENV=production node index.js`
 
 #### Vercel (Frontend Only)
+
 - **Build Command**: `cd frontend && npm install && npm run build`
 - **Output Directory**: `frontend/dist`
 
-### Environment Variables
+### Environment Configuration
+
 All platforms use the same environment variable names (see `.env.example`)
 
 ## Database Schema
 
-### Phase 0-1 Tables
+### Collections
+
 - `users` - User accounts (email/password)
-- `user_credits` - Credit balances
+- `usercredits` - Credit balances
 - `purchases` - Purchase history
 - `jobs` - A2E job processing records
-- `miniapp_creations` - Uploaded media files
-- `analytics_events` - Analytics tracking
+- `miniappcreations` - Uploaded media files
+- `analyticsevents` - Analytics tracking
 
-### Phase 2 Tables
+### Phase 2 Collections
+
 - `plans` - Subscription plans (Pro: $79.99/month)
 - `skus` - Product catalog (3 SKUs: video, image, bundle)
 - `flags` - Price modifiers (Rapid, Custom, Batch)
-- `user_plans` - User subscriptions
-- `plan_usage` - Monthly usage tracking
+- `userplans` - User subscriptions
+- `planusage` - Monthly usage tracking
 - `orders` - Order history with pricing details
 
-**Migration**: Tables created automatically via `CREATE TABLE IF NOT EXISTS` on server start.
+**Migration**: Collections and indexes created automatically via Mongoose models on server start.
 
-### Database Migration Guide
+### Database Configuration
+
+#### MongoDB Atlas Setup
+
+1. **Create MongoDB Atlas Cluster**:
+   - Go to [MongoDB Atlas](https://cloud.mongodb.com)
+   - Create a new cluster (M0 free tier is sufficient for development)
+   - Create a database user with password
+
+2. **Configure Network Access**:
+   - Add your IP address to IP Access List (or use 0.0.0.0/0 for all access)
+   - Ensure your deployment environment can access the cluster
+
+3. **Get Connection String**:
+   - Click "Connect" on your cluster
+   - Select "Connect your application"
+   - Choose "Node.js" driver
+   - Copy the connection string
+
+4. **Update Environment Variables**:
+
+   ```env
+   MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/faceshot_chopshop?retryWrites=true&w=majority
+   MONGODB_DB_NAME=faceshot_chopshop
+   ```
 
 #### Environment Separation
-- **Development**: Use `dev.db` (default) - ignored by Git, safe for local development
-- **Production**: Explicitly set `DB_PATH` to external database path - never use default paths like `production.db`
-- **Staging/Testing**: Use separate database files or environment-specific paths
 
-#### Configuration
-Set `DB_PATH` environment variable to control database location:
-```env
-# Development (default - no need to set)
-# DB_PATH=dev.db
-
-# Production (required)
-DB_PATH=/var/data/production.db
-
-# Future Postgres migration
-DB_PATH=postgresql://user:pass@host:5432/dbname
-```
+- **Development**: Use local MongoDB Atlas cluster or separate database
+- **Production**: Use dedicated production cluster with proper security
+- **Staging/Testing**: Use separate database within same cluster
 
 #### Migration Strategy
-The app uses lightweight migrations compatible with SQLite:
-1. **Automatic Schema Creation**: `CREATE TABLE IF NOT EXISTS` ensures tables exist
-2. **Column Additions**: `ALTER TABLE ADD COLUMN IF NOT EXISTS` for schema evolution
-3. **Data Seeding**: Initial data inserted with `INSERT OR IGNORE` to prevent duplicates
+
+The app uses Mongoose for schema management:
+
+1. **Automatic Schema Creation**: Models define collections and indexes
+2. **Schema Evolution**: Use Mongoose schema versioning for changes
+3. **Data Seeding**: Initial data inserted via startup scripts
 
 #### Resetting Database
-To reset your database (⚠️ **destroys all data**):
-```bash
-# Remove database file (use the path from DB_PATH)
-rm dev.db  # for development
-# or rm /var/data/production.db  # for production
 
-# Restart server (auto-creates tables and seeds data)
+To reset your database (⚠️ **destroys all data**):
+
+```bash
+# Connect to MongoDB Atlas and drop collections via MongoDB Compass
+# Or use the MongoDB shell:
+mongosh "mongodb+srv://username:password@cluster.mongodb.net/faceshot_chopshop"
+> db.dropDatabase()
+
+# Restart server (auto-creates collections and seeds data)
 npm start
 ```
 
 #### Security Notes
-- Database files contain sensitive user data - never commit to version control
+
+- Database contains sensitive user data - never commit to version control
+- Use environment-specific database configurations to prevent data mixing
+- Consider encrypting database data in production environments
 - Use environment-specific database files to prevent data mixing
 - Consider encrypting database files in production environments
 
 ## API Endpoints
 
 ### Authentication (Phase 0-1)
+
 - `POST /api/auth/signup` - Create account
 - `POST /api/auth/login` - Login
 - `GET /api/auth/me` - Get current user
 
 ### File Upload & Processing (Phase 0-1)
+
 - `POST /api/web/upload` - Upload media to Cloudinary
 - `POST /api/web/process` - Start A2E job processing
 - `GET /api/web/status?id=<job_id>` - Get job status
 - `GET /api/web/creations` - List user's jobs
 
 ### Credits & Payments (Phase 0-1)
+
 - `GET /api/web/credits` - Get credit balance
 - `GET /api/web/packs` - List credit packs
 - `POST /api/web/checkout` - Create Stripe checkout session
 - `POST /api/stripe/webhook` - Stripe webhook handler
 
 ### Pricing & Subscriptions (Phase 2)
+
 - `POST /api/pricing/quote` - Get pricing estimate
 - `GET /api/plans` - List subscription plans
 - `POST /api/subscribe` - Create Stripe subscription
 - `POST /api/orders/create` - Create order with pricing
 
 ### Catalog
+
 - `GET /api/web/catalog` - Get available tools
 
 ## Workflow Examples
 
 ### Credit-Only User (Phase 0-1)
-```
+
+```text
 1. Sign up/login
 2. Purchase credits via Stripe
 3. Upload media
@@ -286,7 +339,8 @@ npm start
 ```
 
 ### Subscription User (Phase 2)
-```
+
+```text
 1. Sign up/login
 2. Subscribe to plan
 3. Get pricing quote
@@ -300,6 +354,7 @@ npm start
 ## Testing
 
 ### Manual Testing Checklist (Phase 0-1)
+
 - [ ] Signup/login with email/password
 - [ ] Upload image file
 - [ ] Process each catalog type (faceswap, img2vid, enhance, bgremove, avatar)
@@ -309,6 +364,7 @@ npm start
 - [ ] Verify webhook updates credits
 
 ### Pricing System Testing (Phase 2)
+
 - [ ] Get pricing quote for SKU
 - [ ] Create order
 - [ ] Process job with order_id
@@ -318,7 +374,7 @@ npm start
 
 ## Project Structure
 
-```
+```text
 .
 ├── index.js                 # Express server + API routes
 ├── services/
@@ -345,22 +401,31 @@ npm start
 ## Troubleshooting
 
 ### Database Initialization
-Tables are created automatically on first run. To reset:
+
+Collections and indexes are created automatically on first run via Mongoose models. To reset:
+
 ```bash
-rm dev.db  # or your configured DB_PATH
+# Connect to MongoDB Atlas and drop database
+mongosh "mongodb+srv://username:password@cluster.mongodb.net/faceshot_chopshop"
+> db.dropDatabase()
+
+# Restart server
 npm start
 ```
 
 ### A2E API Errors
+
 - Verify `A2E_API_KEY` is correct
-- Check A2E API status at https://video.a2e.ai
+- Check A2E API status at <https://video.a2e.ai>
 - Review logs with `LOG_LEVEL=debug`
 
 ### Stripe Webhook Not Working
+
 - Verify `STRIPE_WEBHOOK_SECRET` matches Stripe dashboard
 - Test locally with Stripe CLI: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
 
 ### Pricing Margin Errors
+
 - Ensure `COST_PER_CREDIT` and `MIN_MARGIN` are set correctly
 - Review SKU base prices in database seed data
 - Check logs for margin calculation details

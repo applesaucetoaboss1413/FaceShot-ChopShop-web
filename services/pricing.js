@@ -1,4 +1,5 @@
 const { getMonthPeriod } = require('./date-utils');
+const db = require('../db/mongo');
 
 // Currency symbols mapping
 const CURRENCY_SYMBOLS = {
@@ -10,22 +11,21 @@ const CURRENCY_SYMBOLS = {
 };
 
 class PricingEngine {
-  constructor(db) {
-    this.db = db;
+  constructor() {
     this.COST_PER_CREDIT = Number(process.env.COST_PER_CREDIT || 0.0111);
     this.MIN_MARGIN = Number(process.env.MIN_MARGIN || 0.40);
   }
 
   async quote(userId, skuCode, quantity = 1, appliedFlags = [], currency = 'usd') {
-    const sku = this.db.prepare('SELECT * FROM skus WHERE code = ? AND active = 1').get(skuCode);
+    const sku = await db.getSkuByCode(skuCode);
     if (!sku) throw new Error('sku_not_found');
 
-    const userPlan = this.getUserActivePlan(userId);
+    const userPlan = await db.getUserActivePlan(userId);
 
     let remainingSeconds = 0;
     if (userPlan) {
-      const plan = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(userPlan.plan_id);
-      const usage = this.getCurrentPeriodUsage(userId, userPlan.plan_id);
+      const plan = await db.getPlanById(userPlan.plan_id);
+      const usage = await this.getCurrentPeriodUsage(userId, userPlan.plan_id);
       remainingSeconds = plan.included_seconds - (usage ? usage.seconds_used : 0);
       remainingSeconds = Math.max(0, remainingSeconds);
     }
@@ -33,7 +33,7 @@ class PricingEngine {
     const totalCredits = sku.base_credits * quantity;
     const totalSeconds = totalCredits;
 
-    const defaultFlags = JSON.parse(sku.default_flags || '[]');
+    const defaultFlags = sku.default_flags || [];
     const allFlags = [...new Set([...defaultFlags, ...appliedFlags])];
 
     // BUG 6 FIX: Validate flag codes are alphanumeric before SQL execution
@@ -47,7 +47,7 @@ class PricingEngine {
     });
 
     const flagRecords = validatedFlags.length > 0
-      ? this.db.prepare(`SELECT * FROM flags WHERE code IN (${validatedFlags.map(() => '?').join(',')}) AND active = 1`).all(...validatedFlags)
+      ? await db.getFlagsByCodes(validatedFlags)
       : [];
 
     let price = sku.base_price_cents * quantity;
@@ -78,7 +78,7 @@ class PricingEngine {
     let overageCost = 0;
 
     if (userPlan) {
-      const plan = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(userPlan.plan_id);
+      const plan = await db.getPlanById(userPlan.plan_id);
       secondsFromPlan = Math.min(totalSeconds, remainingSeconds);
       overageSeconds = Math.max(0, totalSeconds - remainingSeconds);
       overageCost = overageSeconds * plan.overage_rate_per_second_cents;
@@ -113,58 +113,34 @@ class PricingEngine {
     };
   }
 
-  getUserActivePlan(userId) {
-    const now = new Date().toISOString();
-    return this.db.prepare(`
-      SELECT * FROM user_plans 
-      WHERE user_id = ? 
-        AND status = 'active' 
-        AND start_date <= ? 
-        AND (end_date IS NULL OR end_date > ?)
-      ORDER BY start_date DESC 
-      LIMIT 1
-    `).get(userId, now, now);
+  async getUserActivePlan(userId) {
+    return await db.getUserActivePlan(userId);
   }
 
   // BUG #1 FIX: Use shared date helper for consistent period calculations
-  getCurrentPeriodUsage(userId, planId) {
+  async getCurrentPeriodUsage(userId, planId) {
     const now = new Date();
     const { periodStart, periodEnd } = getMonthPeriod(now);
 
-    let usage = this.db.prepare(`
-      SELECT * FROM plan_usage
-      WHERE user_id = ?
-        AND plan_id = ?
-        AND period_start = ?
-        AND period_end = ?
-    `).get(userId, planId, periodStart, periodEnd);
+    let usage = await db.getCurrentPeriodUsage(userId, planId, periodStart, periodEnd);
 
     if (!usage) {
-      this.db.prepare(`
-        INSERT INTO plan_usage (user_id, plan_id, period_start, period_end, seconds_used, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 0, ?, ?)
-      `).run(userId, planId, periodStart, periodEnd, now.toISOString(), now.toISOString());
-
-      usage = { user_id: userId, plan_id: planId, seconds_used: 0, period_start: periodStart, period_end: periodEnd };
+      usage = await db.createOrUpdatePlanUsage(userId, planId, periodStart, periodEnd, 0);
     }
 
     return usage;
   }
 
   // BUG #1 FIX: Use shared date helper for consistent period calculations
-  deductUsage(userId, planId, seconds) {
+  async deductUsage(userId, planId, seconds) {
     const now = new Date();
     const { periodStart, periodEnd } = getMonthPeriod(now);
 
     // Ensure usage record exists (this creates it if missing)
-    const usage = this.getCurrentPeriodUsage(userId, planId);
+    await this.getCurrentPeriodUsage(userId, planId);
 
     // Now update the existing record
-    this.db.prepare(`
-      UPDATE plan_usage
-      SET seconds_used = seconds_used + ?, updated_at = ?
-      WHERE user_id = ? AND plan_id = ? AND period_start = ? AND period_end = ?
-    `).run(seconds, now.toISOString(), userId, planId, periodStart, periodEnd);
+    await db.deductUsage(userId, planId, periodStart, periodEnd, seconds);
   }
 }
 

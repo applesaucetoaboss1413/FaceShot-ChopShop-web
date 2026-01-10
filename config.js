@@ -4,7 +4,7 @@
 const requiredEnvVars = [
     'PORT',
     'NODE_ENV',
-    'DB_PATH',
+    'MONGODB_URI',
     'JWT_SECRET',
     'ADMIN_SECRET',
     'A2E_API_KEY',
@@ -82,7 +82,7 @@ module.exports = {
     // Other config (with defaults)
     port: process.env.PORT,
     nodeEnv: process.env.NODE_ENV,
-    dbPath: process.env.DB_PATH || 'dev.db',
+    mongodbUri: process.env.MONGODB_URI,
     publicUrl: process.env.PUBLIC_URL,
     frontendUrl: process.env.FRONTEND_URL,
     logLevel: process.env.LOG_LEVEL || 'info',
@@ -120,23 +120,9 @@ console.log(`   - COST_PER_CREDIT: $${costPerCredit.toFixed(4)} per credit`);
 console.log(`   - MIN_MARGIN: ${(minMargin * 100).toFixed(1)}%`);
 console.log(`   - MAX_JOB_SECONDS: ${maxJobSeconds}`);
 
-// Validate database path configuration
-if (module.exports.nodeEnv === 'production' && !process.env.DB_PATH) {
-    console.error('❌ CRITICAL: DB_PATH must be explicitly set in production environment.');
-    console.error('💡 Please set DB_PATH in your environment variables (e.g., DB_PATH=/var/data/production.db)');
-    console.error('   Never use default paths like "production.db" to prevent accidental commits.');
+// Validate MongoDB URI configuration
+if (module.exports.nodeEnv === 'production' && !process.env.MONGODB_URI) {
+    console.error('❌ CRITICAL: MONGODB_URI must be explicitly set in production environment.');
+    console.error('💡 Please set MONGODB_URI in your environment variables (e.g., MONGODB_URI=mongodb+srv://...)');
     process.exit(1);
-}
-
-// Warn if production DB path is inside repo tree
-if (module.exports.nodeEnv === 'production' && process.env.DB_PATH) {
-    const path = require('path');
-    const fs = require('fs');
-    const dbPath = path.resolve(process.env.DB_PATH);
-    const repoRoot = process.cwd();
-    if (dbPath.startsWith(repoRoot + path.sep) || dbPath === repoRoot) {
-        console.warn('⚠️  WARNING: DB_PATH points inside the repository tree in production.');
-        console.warn('   This may lead to accidental commits of sensitive data.');
-        console.warn('   Recommended: Use external paths like /var/data/production.db');
-    }
 }

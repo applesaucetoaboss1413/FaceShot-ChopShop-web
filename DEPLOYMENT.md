@@ -11,11 +11,11 @@
 
 Before deploying, ensure you have:
 
-- ✅ **A2E API Key** - Get from https://a2e.ai
-- ✅ **Stripe Account** - Live mode keys from https://dashboard.stripe.com
+- ✅ **A2E API Key** - Get from <https://a2e.ai>
+- ✅ **Stripe Account** - Live mode keys from <https://dashboard.stripe.com>
   - Secret Key
   - Webhook Secret (for production endpoint)
-- ✅ **Cloudinary Account** - Get from https://cloudinary.com
+- ✅ **Cloudinary Account** - Get from <https://cloudinary.com>
   - Cloud Name
   - API Key
   - API Secret
@@ -27,6 +27,7 @@ Before deploying, ensure you have:
 ### 2. **Click Preview Button First**
 
 Before deploying:
+
 1. Click **Preview** in your hosting provider's interface
 2. Test these critical flows:
    - ✅ Landing page loads
@@ -47,7 +48,11 @@ Before deploying:
 # Core Configuration
 PORT=3000
 NODE_ENV=production
-DB_PATH=/var/data/production.db
+
+# MongoDB Atlas Configuration
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
+MONGODB_DB_NAME=faceshot_chopshop
+
 PUBLIC_URL=https://your-backend.onrender.com
 FRONTEND_URL=https://your-frontend.onrender.com
 LOG_LEVEL=info
@@ -77,9 +82,9 @@ MIN_MARGIN=0.40
 MAX_JOB_SECONDS=5000
 ```
 
-3. **Click "Deploy Now"**
-4. **Wait 10-15 minutes** for deployment to complete
-5. **Receive your live URL** from your hosting provider
+1. **Click "Deploy Now"**
+2. **Wait 10-15 minutes** for deployment to complete
+3. **Receive your live URL** from your hosting provider
 
 ---
 
@@ -89,7 +94,7 @@ MAX_JOB_SECONDS=5000
 
 Once deployed, you need to set up the Stripe webhook endpoint:
 
-1. Go to https://dashboard.stripe.com/webhooks
+1. Go to <https://dashboard.stripe.com/webhooks>
 2. Click **"Add endpoint"**
 3. Enter your webhook URL: `https://your-deployed-url/webhook/stripe`
 4. Select events to listen for:
@@ -119,18 +124,21 @@ Once deployed, you need to set up the Stripe webhook endpoint:
 After deployment, test these critical flows:
 
 #### Authentication ✅
+
 - [ ] Can create new account
 - [ ] Can log in
 - [ ] JWT token works
 - [ ] Protected routes require auth
 
 #### Pricing System ✅
+
 - [ ] Plans page displays correctly
 - [ ] SKUs load with correct prices
 - [ ] Quote API returns accurate pricing
 - [ ] Margins are all above 40%
 
 #### Subscription Flow ✅
+
 - [ ] Can select a plan
 - [ ] Stripe checkout redirects correctly
 - [ ] Payment success creates user_plan record
@@ -138,6 +146,7 @@ After deployment, test these critical flows:
 - [ ] Usage tracking works
 
 #### Job Processing ✅
+
 - [ ] Can upload media file
 - [ ] Job pricing calculated correctly
 - [ ] A2E API receives request
@@ -146,6 +155,7 @@ After deployment, test these critical flows:
 - [ ] Failed jobs refund credits
 
 #### Admin Functions ✅
+
 - [ ] Admin email can access `/api/admin/*` routes
 - [ ] Can view stats
 - [ ] Can edit plan pricing
@@ -160,12 +170,12 @@ After deployment, test these critical flows:
 | Variable | Description | Example | Where to Get |
 |----------|-------------|---------|--------------|
 | `JWT_SECRET` | JWT signing key | `a8f3k2...` | Generate random 32+ chars |
-| `A2E_API_KEY` | A2E API authentication | `a2e_live_...` | https://a2e.ai dashboard |
-| `STRIPE_SECRET_KEY` | Stripe live secret key | `sk_live_...` | https://dashboard.stripe.com/apikeys |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing | `whsec_...` | https://dashboard.stripe.com/webhooks |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary account name | `my-cloud` | https://cloudinary.com/console |
-| `CLOUDINARY_API_KEY` | Cloudinary API key | `123456789012345` | https://cloudinary.com/console |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret | `abcdef...` | https://cloudinary.com/console |
+| `A2E_API_KEY` | A2E API authentication | `a2e_live_...` | <https://a2e.ai> dashboard |
+| `STRIPE_SECRET_KEY` | Stripe live secret key | `sk_live_...` | <https://dashboard.stripe.com/apikeys> |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing | `whsec_...` | <https://dashboard.stripe.com/webhooks> |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary account name | `my-cloud` | <https://cloudinary.com/console> |
+| `CLOUDINARY_API_KEY` | Cloudinary API key | `123456789012345` | <https://cloudinary.com/console> |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret | `abcdef...` | <https://cloudinary.com/console> |
 | `ADMIN_SECRET` | Admin access secret | `your-admin-secret` | Generate random string |
 
 ### Optional Variables (Defaults Provided)
@@ -174,7 +184,8 @@ After deployment, test these critical flows:
 |----------|---------|-------------|
 | `NODE_ENV` | `production` | Environment mode |
 | `PORT` | `3000` | Server port |
-| `DB_PATH` | `/var/data/production.db` | SQLite database file |
+| `MONGODB_URI` | Required | MongoDB Atlas connection string |
+| `MONGODB_DB_NAME` | `faceshot_chopshop` | Database name |
 | `PUBLIC_URL` | Auto-detected | Backend public URL |
 | `FRONTEND_URL` | Auto-detected | Frontend URL for CORS |
 | `LOG_LEVEL` | `info` | Logging verbosity |
@@ -188,10 +199,12 @@ After deployment, test these critical flows:
 ## 🎯 Cost & Pricing Overview
 
 ### Deployment Costs
+
 - **Hosting**: Platform-specific (see your provider's pricing)
 - **Your Costs**: A2E API usage + Stripe fees (1-3%)
 
 ### Revenue Model
+
 - **Starter Plan**: $19.99/month (66% margin)
 - **Pro Plan**: $79.99/month (58% margin)
 - **Agency Plan**: $199/month (44% margin)
@@ -218,31 +231,41 @@ Before going live:
 ## 🐛 Common Issues & Fixes
 
 ### Issue: "Stripe webhook signature verification failed"
-**Solution**: 
+
+**Solution**:
+
 1. Make sure you're using the correct webhook secret
 2. Verify the webhook endpoint URL matches exactly
 3. Check webhook is in live mode (not test mode)
 
 ### Issue: "A2E API error"
+
 **Solution**:
+
 1. Verify A2E_API_KEY is correct
 2. Check A2E account has sufficient credits
 3. Ensure A2E_BASE_URL is correct
 
 ### Issue: "Cloudinary upload fails"
+
 **Solution**:
+
 1. Verify all 3 Cloudinary credentials
 2. Check upload preset settings
 3. Verify domain is whitelisted
 
 ### Issue: "Admin routes return 403"
+
 **Solution**:
+
 1. Add your email to ADMIN_EMAILS variable
 2. Log out and log back in
 3. Verify email matches exactly (case-sensitive)
 
 ### Issue: "Jobs stuck in processing"
+
 **Solution**:
+
 1. Check A2E API is responding
 2. Verify polling is running (check logs)
 3. Manually check A2E task status
@@ -282,7 +305,7 @@ If something goes wrong after deployment:
 1. **Rollback Feature**: Many hosting providers support rollback to a previous stable version
 2. **Cost**: No additional charge for rollback
 3. **Process**: Use your hosting provider's rollback tooling or deployment history
-4. **Database**: SQLite file persists, so no data loss
+4. **Database**: MongoDB Atlas data persists in cloud, no data loss
 
 ---
 
@@ -317,16 +340,16 @@ If something goes wrong after deployment:
 2. **Test Payments**: Use Stripe test cards before real money
 3. **Monitor Margins**: Check admin stats daily for first week
 4. **Customer Support**: Set up support email/chat
-5. **Backups**: SQLite database can be backed up via file copy
+5. **Backups**: MongoDB Atlas provides automatic backups
 
 ---
 
 ## 📞 Support Resources
 
 - **Hosting Platform**: Refer to your provider's support documentation
-- **Stripe Docs**: https://stripe.com/docs
-- **A2E Docs**: https://a2e.ai/docs
-- **Cloudinary Docs**: https://cloudinary.com/documentation
+- **Stripe Docs**: <https://stripe.com/docs>
+- **A2E Docs**: <https://a2e.ai/docs>
+- **Cloudinary Docs**: <https://cloudinary.com/documentation>
 
 ---
 
