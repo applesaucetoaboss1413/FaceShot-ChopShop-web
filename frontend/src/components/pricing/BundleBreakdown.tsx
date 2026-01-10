@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, ChevronDown, ChevronUp, Package, Image, Video, FileText } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { displayCredits } from '@/lib/priceConverter';
 
 interface Tool {
   name: string;
@@ -14,7 +15,7 @@ interface Tool {
 interface BundleSpec {
   id: string;
   name: string;
-  price: number;
+  credits: number;
   totalCredits: number;
   tools: Tool[];
   outputs: {
@@ -30,7 +31,7 @@ const bundleSpecs: BundleSpec[] = [
   {
     id: 'ecommerce',
     name: 'E-commerce Pack',
-    price: 225,
+    credits: 22500,
     totalCredits: 22500,
     tools: [
       { name: 'Product Images (1080p)', credits: 100, quantity: 75, description: '3 angles per SKU for 25 products' },
@@ -58,7 +59,7 @@ const bundleSpecs: BundleSpec[] = [
   {
     id: 'brand-launch',
     name: 'Brand Launch Kit',
-    price: 449,
+    credits: 44900,
     totalCredits: 44900,
     tools: [
       { name: 'Logo & Banner Design', credits: 500, quantity: 5, description: 'Complete brand identity' },
@@ -88,7 +89,7 @@ const bundleSpecs: BundleSpec[] = [
   {
     id: 'agency',
     name: 'Agency Asset Bank',
-    price: 599,
+    credits: 59900,
     totalCredits: 59900,
     tools: [
       { name: 'Mixed Image Assets', credits: 150, quantity: 100, description: 'Various image types' },
@@ -179,7 +180,7 @@ export function BundleBreakdown() {
                       <div>
                         <CardTitle className="text-xl mb-1">{bundle.name}</CardTitle>
                         <CardDescription className="text-base">
-                          ${bundle.price} • {bundle.totalCredits.toLocaleString()} Credits
+                          {displayCredits(bundle.credits)} • {bundle.totalCredits.toLocaleString()} Credits
                         </CardDescription>
                       </div>
                     </div>
