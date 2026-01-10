@@ -20,6 +20,7 @@ import { api, SKU, PricingQuote, Flag } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { Checkbox } from '@/components/ui/checkbox';
+import { displayCredits } from '@/lib/priceConverter';
 
 const vectorCategories = [
   { id: 'v1', name: 'Images', code: 'V1' },
@@ -473,7 +474,7 @@ export default function CreatePage() {
                       <div className="space-y-2 pt-4 border-t border-border">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Base Price</span>
-                          <span>${(quote.customerPriceCents / 100).toFixed(2)}</span>
+                          <span>{displayCredits(quote.customerPriceCents)}</span>
                         </div>
 
                         {quote.overageSeconds > 0 && (

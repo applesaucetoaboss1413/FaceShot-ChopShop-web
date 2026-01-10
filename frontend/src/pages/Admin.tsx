@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { displayCredits } from '@/lib/priceConverter';
 
 interface SKUStat {
     code: string;
@@ -450,9 +451,9 @@ export default function AdminPage() {
                                                             </div>
                                                             <p className="text-sm text-muted-foreground mb-2">{plan.description}</p>
                                                             <div className="flex gap-4 text-sm">
-                                                                <span>Price: ${(plan.monthly_price_cents / 100).toFixed(2)}/mo</span>
+                                                                <span>Price: {displayCredits(plan.monthly_price_cents)}/mo</span>
                                                                 <span>Seconds: {plan.included_seconds}</span>
-                                                                <span>Overage: ${(plan.overage_rate_per_second_cents / 100).toFixed(2)}/sec</span>
+                                                                <span>Overage: {displayCredits(plan.overage_rate_per_second_cents)}/sec</span>
                                                             </div>
                                                         </div>
                                                         <Button onClick={() => handleEdit('plan', plan)} size="sm" variant="outline">
@@ -528,7 +529,7 @@ export default function AdminPage() {
                                                             </div>
                                                             <p className="text-sm text-muted-foreground mb-2">{sku.description}</p>
                                                             <div className="flex gap-4 text-sm">
-                                                                <span>Price: ${(sku.base_price_cents / 100).toFixed(2)}</span>
+                                                                <span>Price: {displayCredits(sku.base_price_cents)}</span>
                                                                 <span>Credits: {sku.base_credits}</span>
                                                             </div>
                                                         </div>
@@ -607,7 +608,7 @@ export default function AdminPage() {
                                                             <p className="text-sm text-muted-foreground mb-2">{flag.description}</p>
                                                             <div className="flex gap-4 text-sm">
                                                                 <span>Multiplier: {flag.price_multiplier}×</span>
-                                                                <span>Flat Add: ${(flag.price_add_flat_cents / 100).toFixed(2)}</span>
+                                                                <span>Flat Add: {displayCredits(flag.price_add_flat_cents)}</span>
                                                             </div>
                                                         </div>
                                                         <Button onClick={() => handleEdit('flag', flag)} size="sm" variant="outline">

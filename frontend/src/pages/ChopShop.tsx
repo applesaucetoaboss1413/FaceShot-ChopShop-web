@@ -688,7 +688,7 @@ export default function ChopShop() {
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm text-muted-foreground">Estimated Price</span>
                           <span className="text-2xl font-bold text-primary">
-                            ${(estimatedPrice / 100).toFixed(2)}
+                            {displayCredits(estimatedPrice)}
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground">
