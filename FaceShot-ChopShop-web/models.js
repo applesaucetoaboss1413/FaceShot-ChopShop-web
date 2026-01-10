@@ -42,6 +42,14 @@ const purchaseSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Processed Events Schema (for webhook idempotency)
+const processedEventSchema = new mongoose.Schema({
+  event_id: { type: String, required: true, unique: true },
+  event_type: { type: String, required: true },
+  processed_at: { type: Date, default: Date.now },
+  status: { type: String, default: 'processed' } // processed, failed
+});
+
 // Stats Schema
 const statsSchema = new mongoose.Schema({
   total_users: { type: Number, default: 0 },
@@ -61,6 +69,7 @@ const User = mongoose.model('User', userSchema);
 const UserCredits = mongoose.model('UserCredits', userCreditsSchema);
 const Job = mongoose.model('Job', jobSchema);
 const Purchase = mongoose.model('Purchase', purchaseSchema);
+const ProcessedEvent = mongoose.model('ProcessedEvent', processedEventSchema);
 const Stats = mongoose.model('Stats', statsSchema);
 
 module.exports = {
@@ -68,5 +77,6 @@ module.exports = {
   UserCredits,
   Job,
   Purchase,
+  ProcessedEvent,
   Stats
 };

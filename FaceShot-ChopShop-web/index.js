@@ -16,9 +16,10 @@ dotenv.config()
 
 // MongoDB setup
 const dbHelper = require('./db-helper')
+const { ProcessedEvent } = require('./models')
 
 const logger = winston.createLogger({
-    level: 'info',
+    level: process.env.LOG_LEVEL || 'info',
     format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()
@@ -131,34 +132,89 @@ app.post('/webhook/stripe', async (req, res) => {
     try {
         event = stripe.webhooks.constructEvent(req.rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET)
     } catch (err) {
-        return res.status(400).send(`Webhook Error: ${err.message}`)
+        logger.warn({ msg: 'webhook_signature_invalid', error: err.message })
+        return res.status(400).send('Webhook signature verification failed')
     }
 
-    if (event.type === 'checkout.session.completed') {
-        const session = event.data.object
-        const { user_id, points, pack_type, source } = session.metadata || {}
+    // Check idempotency - skip if already processed
+    const existingEvent = await ProcessedEvent.findOne({ event_id: event.id })
+    if (existingEvent) {
+        logger.info({ msg: 'webhook_duplicate_event', event_id: event.id, event_type: event.type })
+        return res.status(200).json({ received: true })
+    }
 
-        if (source === 'web' && user_id) {
-            try {
-                // Create purchase record in MongoDB
-                await dbHelper.createPurchase(
-                    user_id, 
-                    session.id, 
-                    session.amount_total, 
-                    Number(points)
-                )
-                
-                // Add credits to user
-                await addCredits(user_id, Number(points))
-                
-                logger.info({ msg: 'payment_success', user_id, points })
-            } catch (e) {
-                logger.error({ msg: 'payment_db_error', error: String(e) })
+    // Validate supported event types
+    const supportedEvents = ['checkout.session.completed']
+    if (!supportedEvents.includes(event.type)) {
+        logger.warn({ msg: 'webhook_unsupported_event_type', event_type: event.type, event_id: event.id })
+        // Still mark as processed to avoid retries
+        await ProcessedEvent.create({ event_id: event.id, event_type: event.type, status: 'ignored' })
+        return res.status(200).json({ received: true })
+    }
+
+    try {
+        if (event.type === 'checkout.session.completed') {
+            const session = event.data.object
+
+            // Validate required metadata
+            const { user_id, points, pack_type, source } = session.metadata || {}
+            if (!user_id || !points || source !== 'web') {
+                logger.warn({
+                    msg: 'webhook_invalid_metadata',
+                    event_id: event.id,
+                    user_id: user_id || 'missing',
+                    points: points || 'missing',
+                    source: source || 'missing'
+                })
+                await ProcessedEvent.create({ event_id: event.id, event_type: event.type, status: 'invalid' })
+                return res.status(200).json({ received: true }) // Invalid but not retryable
             }
+
+            // Validate session data
+            if (!session.id || !session.amount_total || isNaN(Number(points))) {
+                logger.warn({
+                    msg: 'webhook_invalid_session_data',
+                    event_id: event.id,
+                    session_id: session.id || 'missing',
+                    amount_total: session.amount_total || 'missing',
+                    points
+                })
+                await ProcessedEvent.create({ event_id: event.id, event_type: event.type, status: 'invalid' })
+                return res.status(200).json({ received: true })
+            }
+
+            // Process the payment
+            await dbHelper.createPurchase(user_id, session.id, session.amount_total, Number(points))
+            await addCredits(user_id, Number(points))
+
+            // Mark as processed
+            await ProcessedEvent.create({ event_id: event.id, event_type: event.type, status: 'processed' })
+
+            logger.info({
+                msg: 'webhook_payment_processed',
+                event_id: event.id,
+                user_id,
+                points: Number(points),
+                amount_cents: session.amount_total
+            })
+
+            return res.status(200).json({ received: true })
         }
+    } catch (dbError) {
+        logger.error({
+            msg: 'webhook_db_error',
+            event_id: event.id,
+            event_type: event.type,
+            error: dbError.message
+        })
+        // Return 500 to trigger Stripe retry
+        return res.status(500).send('Internal server error')
     }
 
-    res.json({ received: true })
+    // Fallback - should not reach here
+    logger.error({ msg: 'webhook_unhandled_event', event_id: event.id, event_type: event.type })
+    await ProcessedEvent.create({ event_id: event.id, event_type: event.type, status: 'unhandled' })
+    res.status(200).json({ received: true })
 })
 
 app.use(limiter)
@@ -188,38 +244,38 @@ function startStatusPolling(jobId, type, a2eTaskId) {
         try {
             const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
             const status = await a2eService.getTaskStatus(type, a2eTaskId)
-            
+
             if (!status || !status.data) {
                 logger.error({ msg: 'polling_invalid_response', jobId, type, a2eTaskId })
                 return
             }
-            
+
             const currentStatus = status.data.current_status || status.data.status
-            
+
             if (currentStatus === 'completed' || currentStatus === 'success') {
                 const resultUrl = status.data.result_url || status.data.video_url || status.data.media_url || ''
-                
+
                 await dbHelper.updateJob(jobId, {
                     status: 'completed',
                     result_url: resultUrl
                 })
-                
+
                 clearInterval(pollInterval)
                 pollingJobs.delete(jobId)
                 logger.info({ msg: 'job_completed', jobId, resultUrl })
             } else if (currentStatus === 'failed' || currentStatus === 'error') {
                 const errorMessage = status.data.failed_message || status.data.error_message || 'Unknown error'
-                
+
                 const job = await dbHelper.getJob(jobId)
                 if (job && job.credits_used > 0) {
                     await dbHelper.addCredits(job.user_id, job.credits_used)
                 }
-                
+
                 await dbHelper.updateJob(jobId, {
                     status: 'failed',
                     error: errorMessage
                 })
-                
+
                 clearInterval(pollInterval)
                 pollingJobs.delete(jobId)
                 logger.error({ msg: 'job_failed', jobId, error: errorMessage })
@@ -228,7 +284,7 @@ function startStatusPolling(jobId, type, a2eTaskId) {
             logger.error({ msg: 'polling_error', jobId, error: err.message })
         }
     }, 10000)
-    
+
     pollingJobs.set(jobId, pollInterval)
 }
 
@@ -249,12 +305,12 @@ app.get('/stats', async (req, res) => {
         const stats = await dbHelper.getStats()
         const totalUsers = stats.total_users || 0
         // Note: paying_users and revenue would need purchases to be aggregated
-        res.json({ 
-            videos: stats.videos || 0, 
-            paying_users: 0, 
-            total_users: totalUsers, 
-            conversion_rate: 0, 
-            revenue_cents: 0 
+        res.json({
+            videos: stats.videos || 0,
+            paying_users: 0,
+            total_users: totalUsers,
+            conversion_rate: 0,
+            revenue_cents: 0
         })
     } catch (e) {
         logger.error({ msg: 'stats_error', error: String(e) })
@@ -268,26 +324,26 @@ app.post('/api/auth/signup', async (req, res) => {
         if (!email || !password) {
             return res.status(400).json({ error: 'invalid_email' })
         }
-        
+
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(email)) {
             return res.status(400).json({ error: 'invalid_email' })
         }
-        
+
         if (password.length < 6) {
             return res.status(400).json({ error: 'password_too_short' })
         }
-        
+
         const existing = await dbHelper.getUserByEmail(email)
         if (existing) {
             return res.status(409).json({ error: 'email_exists' })
         }
-        
+
         const passwordHash = await bcrypt.hash(password, 10)
         const user = await dbHelper.createUser(email, passwordHash)
-        
+
         const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
-        
+
         res.status(201).json({
             token,
             user: {
@@ -308,19 +364,19 @@ app.post('/api/auth/login', async (req, res) => {
         if (!email || !password) {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
-        
+
         const user = await dbHelper.getUserByEmail(email)
         if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
-        
+
         const valid = await bcrypt.compare(password, user.password_hash)
         if (!valid) {
             return res.status(401).json({ error: 'invalid_credentials' })
         }
-        
+
         const token = jwt.sign({ id: user.id }, process.env.SESSION_SECRET, { expiresIn: '30d' })
-        
+
         res.json({
             token,
             user: {
@@ -412,16 +468,16 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
     try {
         const type = req.body.type
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
-        
+
         let url = null
         if (req.file && cloudinary.config().cloud_name) {
             const uploaded = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`)
             url = uploaded.secure_url
         }
-        
+
         // Create job with source_url for the upload using MongoDB
         const job = await dbHelper.createJob(req.user.id, type, url, { uploaded: true })
-        
+
         res.json({ status: 'uploaded', url, job_id: job.id })
     } catch (e) {
         logger.error({ msg: 'upload_error', error: String(e) })
@@ -433,27 +489,27 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
         const { type, options = {} } = req.body
         if (!type) return res.status(400).json({ error: 'invalid_payload' })
-        
+
         // Check credits using MongoDB
         const creditData = await dbHelper.getCredits(req.user.id)
         if (!creditData || creditData.balance < 10) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
-        
+
         // Get the most recent uploaded job/creation for this type using MongoDB
         const { Job } = require('./models')
-        const upload = await Job.findOne({ 
-            user_id: req.user.id, 
+        const upload = await Job.findOne({
+            user_id: req.user.id,
             type: type,
             source_url: { $exists: true, $ne: null }
         }).sort({ created_at: -1 })
-        
+
         if (!upload || !upload.source_url) {
             return res.status(400).json({ error: 'no_media_uploaded' })
         }
-        
+
         const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
-        
+
         let a2eResponse
         try {
             a2eResponse = await a2eService.startTask(type, upload.source_url, options)
@@ -461,31 +517,31 @@ app.post('/api/web/process', authenticateToken, async (req, res) => {
             logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
             return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
         }
-        
+
         if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
             return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
         }
-        
+
         const taskId = a2eResponse.data._id
         const costCredits = a2eResponse.data.coins || 10
-        
+
         // Deduct credits using MongoDB
         try {
             await dbHelper.deductCredits(req.user.id, costCredits)
         } catch (error) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
-        
+
         // Update the job with a2e task info using MongoDB
         await dbHelper.updateJob(upload._id.toString(), {
             status: 'processing',
             a2e_task_id: taskId,
             credits_used: costCredits
         })
-        
+
         // Start polling for this job
         startStatusPolling(upload._id.toString(), type, taskId)
-        
+
         res.json({ job_id: upload._id.toString(), status: 'processing', estimated_credits: costCredits })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
@@ -499,13 +555,13 @@ app.get('/api/web/status', async (req, res) => {
         if (!id) {
             return res.status(400).json({ error: 'missing_id', message: 'Job ID is required' })
         }
-        
+
         // MongoDB uses string IDs (ObjectId)
         const job = await dbHelper.getJob(id)
         if (!job) {
             return res.status(404).json({ error: 'not_found', message: 'Job not found' })
         }
-        
+
         res.json({
             job_id: job.id,
             status: job.status,
@@ -526,7 +582,7 @@ const port = process.env.PORT || 3000
 if (process.env.NODE_ENV === 'production') {
     const buildRoot = path.join(__dirname, '..', 'frontend', 'dist')
     const indexPath = path.join(buildRoot, 'index.html')
-    
+
     if (fs.existsSync(indexPath)) {
         logger.info('Serving production build from: ' + buildRoot)
         app.use(express.static(buildRoot))
