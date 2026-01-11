@@ -297,7 +297,7 @@ export default function CreatePage() {
                                   {sku.baseCredits} credits (~{Math.floor(sku.baseCredits / 60)} min)
                                 </span>
                                 <span className="text-primary font-medium">
-                                  ${sku.basePriceUsd}
+                                  {displayCredits(sku.baseCredits)}
                                 </span>
                               </div>
                             </div>
@@ -409,7 +409,7 @@ export default function CreatePage() {
                                   )}
                                   {flag.priceAddFlatCents > 0 && (
                                     <span className="text-xs text-primary font-medium">
-                                      +${flag.priceAddFlatUsd}
+                                      +{displayCredits(flag.priceAddFlatCents)}
                                     </span>
                                   )}
                                 </div>
@@ -482,7 +482,7 @@ export default function CreatePage() {
                             <span className="text-muted-foreground">
                               Overage ({Math.floor(quote.overageSeconds / 60)} min)
                             </span>
-                            <span className="text-orange-400">${quote.overageCostUsd}</span>
+                            <span className="text-orange-400">{displayCredits(quote.overageCostCents)}</span>
                           </div>
                         )}
 
@@ -496,7 +496,7 @@ export default function CreatePage() {
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold">Total Price</span>
                           <span className="text-2xl font-bold text-primary">
-                            ${quote.customerPriceUsd}
+                            {displayCredits(quote.customerPriceCents)}
                           </span>
                         </div>
 

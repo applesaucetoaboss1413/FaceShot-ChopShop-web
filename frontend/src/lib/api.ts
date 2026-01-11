@@ -504,7 +504,7 @@ class ApiClient {
         'avatar': 'A1-IG',
         'image-to-video': 'C2-30',
         'enhance': 'A3-4K',
-        'bgremove': 'A1-IG'
+        'bgremove': 'A4-BR'
       };
       requestPayload.sku_code = typeToSku[payload.type] || 'A1-IG';
     }

@@ -58,11 +58,11 @@ async function initializeDatabase() {
         // Seed flags (idempotent upsert)
         const flags = [
             { id: 'flag_r', code: 'R', label: 'Rapid (same-day)', price_multiplier: 1.4, price_add_flat_cents: 0, description: 'Priority processing with same-day delivery' },
-            { id: 'flag_c', code: 'C', label: 'Custom (brand style)', price_multiplier: 1.0, price_add_flat_cents: 9900, description: 'Custom branding and style application' },
+            { id: 'flag_c', code: 'C', label: 'Custom (brand style)', price_multiplier: 1.0, price_add_flat_cents: 0, description: 'Custom branding and style application' },
             { id: 'flag_b', code: 'B', label: 'Batch discount', price_multiplier: 0.85, price_add_flat_cents: 0, description: 'Automatic discount for bulk orders (10+ items)' },
             { id: 'flag_l_std', code: 'L_STD', label: 'Standard License', price_multiplier: 1.0, price_add_flat_cents: 0, description: 'Standard commercial usage rights' },
-            { id: 'flag_l_ext', code: 'L_EXT', label: 'Extended License', price_multiplier: 1.0, price_add_flat_cents: 30000, description: 'Extended commercial rights for broader usage' },
-            { id: 'flag_l_excl', code: 'L_EXCL', label: 'Exclusive License', price_multiplier: 1.0, price_add_flat_cents: 80000, description: 'Exclusive rights with no redistribution' }
+            { id: 'flag_l_ext', code: 'L_EXT', label: 'Extended License', price_multiplier: 1.0, price_add_flat_cents: 80, description: 'Extended commercial rights for broader usage' },
+            { id: 'flag_l_excl', code: 'L_EXCL', label: 'Exclusive License', price_multiplier: 1.0, price_add_flat_cents: 200, description: 'Exclusive rights with no redistribution' }
         ];
 
         for (const flag of flags) {

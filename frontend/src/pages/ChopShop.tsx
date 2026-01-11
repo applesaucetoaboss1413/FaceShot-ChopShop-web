@@ -266,7 +266,7 @@ export default function ChopShop() {
         }
       });
       setAdjustments(defaults);
-      setEstimatedPrice(selectedTool.base_price_cents);
+      setEstimatedPrice(selectedTool.base_credits || selectedTool.base_price_cents);
     }
   }, [selectedTool]);
 
@@ -277,28 +277,7 @@ export default function ChopShop() {
   const calculatePrice = () => {
     if (!selectedTool) return;
 
-    let price = selectedTool.base_price_cents;
-
-    // Apply adjustment multipliers and additions
-    Object.keys(adjustments).forEach(key => {
-      const def = adjustmentDefs[key];
-      const value = adjustments[key];
-
-      if (!def) return;
-
-      if (def.type === 'select' && def.options) {
-        const option = def.options.find((o: any) => o.value === value);
-        if (option && option.multiplier) {
-          price *= option.multiplier;
-        }
-      } else if (def.type === 'slider' && def.pricePerUnit) {
-        price += value * def.pricePerUnit;
-      } else if (def.type === 'checkbox' && value && def.priceAdd) {
-        price += def.priceAdd;
-      }
-    });
-
-    setEstimatedPrice(Math.round(price));
+    setEstimatedPrice(selectedTool.base_credits || selectedTool.base_price_cents);
   };
 
   const handleFileUpload = (inputKey: string, file: File) => {
@@ -692,7 +671,7 @@ export default function ChopShop() {
                           </span>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Base: ${selectedTool.base_price_usd} • Credits: {selectedTool.base_credits}
+                          Base: {displayCredits(selectedTool.base_credits)}
                         </div>
                       </div>
 

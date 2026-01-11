@@ -236,6 +236,7 @@ const upload = multer({ storage: multer.memoryStorage() })
 
 const packsConfig = require('./shared/config/packs')
 const catalogConfig = require('./shared/config/catalog')
+const catalogFullConfig = require('../shared/config/catalog')
 const A2EService = require('./services/a2e')
 
 const pollingJobs = new Map()
@@ -344,7 +345,7 @@ app.post('/api/auth/signup', async (req, res) => {
         const user = await db.createUser(email, passwordHash)
 
         // Award free signup credits
-        const freeCredits = parseInt(process.env.SIGNUP_FREE_CREDITS) || 5
+        const freeCredits = parseInt(process.env.SIGNUP_FREE_CREDITS) || 100
         await db.addCredits(user.id, freeCredits)
         logger.info({ msg: 'signup_free_credited', userId: user.id, email, credits: freeCredits })
 
@@ -410,7 +411,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     }
 })
 
-app.get('/api/web/catalog', (req, res) => {
+app.get('/api/web/catalog', async (req, res) => {
     console.log('Catalog endpoint called');
     console.log('Catalog config:', catalogConfig);
 
@@ -439,8 +440,22 @@ app.get('/api/web/catalog', (req, res) => {
         return res.status(500).json({ error: 'catalog_config_missing' });
     }
 
+    let skuByCode = {}
+    try {
+        const skus = await db.getSkus(true)
+        skuByCode = (skus || []).reduce((acc, sku) => {
+            acc[sku.code] = sku
+            return acc
+        }, {})
+    } catch (e) {
+        logger.warn({ msg: 'catalog_sku_lookup_failed', error: String(e) })
+    }
+
     catalogConfig.catalog.forEach(item => {
         if (categorized.categories[item.category]) {
+            const sku = skuByCode[item.key] || null
+            const baseCredits = sku && sku.base_credits ? Number(sku.base_credits) : Math.ceil(item.basePrice / 100)
+
             // Determine inputs based on category
             let inputs = ['image'];
             if (item.category === 'video') inputs = ['video', 'image'];
@@ -453,9 +468,12 @@ app.get('/api/web/catalog', (req, res) => {
                 name: item.name,
                 description: item.description,
                 category: item.category,
-                base_price_usd: (item.basePrice / 100).toFixed(2),
-                base_price_cents: item.basePrice,
-                base_credits: Math.ceil(item.basePrice / 100),
+                // Credits-first UI: base_price_cents is treated as credits by the frontend
+                base_price_usd: sku && typeof sku.base_price_cents === 'number'
+                    ? (sku.base_price_cents / 100).toFixed(2)
+                    : (item.basePrice / 100).toFixed(2),
+                base_price_cents: baseCredits,
+                base_credits: baseCredits,
                 icon: item.icon,
                 vector_name: item.key,
                 vector_code: item.key,
@@ -469,6 +487,64 @@ app.get('/api/web/catalog', (req, res) => {
 
     console.log('Returning catalog:', categorized);
     res.json(categorized);
+})
+
+app.post('/api/pricing/quote', authenticateToken, async (req, res) => {
+    try {
+        const { sku_code, quantity = 1, flags = [] } = req.body || {}
+        if (!sku_code) {
+            return res.status(400).json({ error: 'sku_code_required' })
+        }
+
+        const sku = await db.getSkuByCode(sku_code)
+        if (!sku) {
+            return res.status(404).json({ error: 'sku_not_found' })
+        }
+
+        const defaultFlags = Array.isArray(sku.default_flags) ? sku.default_flags : []
+        const appliedFlags = Array.isArray(flags) ? flags : []
+        const allFlags = [...new Set([...defaultFlags, ...appliedFlags])]
+        const flagRecords = allFlags.length > 0 ? await db.getFlagsByCodes(allFlags) : []
+
+        let multiplier = 1.0
+        let flatAdd = 0
+
+        for (const flag of flagRecords) {
+            if (flag.price_multiplier && flag.price_multiplier !== 1.0) multiplier *= Number(flag.price_multiplier)
+            if (flag.price_add_flat_cents && flag.price_add_flat_cents > 0) flatAdd += Number(flag.price_add_flat_cents)
+        }
+
+        const qty = Math.max(1, Number(quantity) || 1)
+        if (qty >= 50) multiplier *= 0.8
+        else if (qty >= 10) multiplier *= 0.9
+
+        const baseCreditsTotal = (Number(sku.base_credits) || 0) * qty
+        const totalCredits = Math.max(1, Math.round(baseCreditsTotal * multiplier) + flatAdd)
+
+        res.json({
+            quote: {
+                sku_code,
+                sku_name: sku.name,
+                quantity: qty,
+                applied_flags: allFlags,
+                // Credits-first: treat customer_price_cents as credits for backwards compatibility
+                customer_price_cents: totalCredits,
+                customer_price_usd: '0.00',
+                internal_cost_cents: 0,
+                internal_cost_usd: '0.00',
+                margin_percent: '0',
+                total_seconds: totalCredits,
+                seconds_from_plan: 0,
+                overage_seconds: 0,
+                overage_cost_cents: 0,
+                overage_cost_usd: '0.00',
+                remaining_plan_seconds: 0
+            }
+        })
+    } catch (e) {
+        logger.error({ msg: 'pricing_quote_error', error: String(e) })
+        res.status(500).json({ error: 'quote_failed' })
+    }
 })
 
 // Pricing Plans endpoint
@@ -633,62 +709,137 @@ app.post('/api/web/upload', authenticateToken, upload.single('file'), async (req
 
 app.post('/api/web/process', authenticateToken, async (req, res) => {
     try {
-        const { type, options = {} } = req.body
-        if (!type) return res.status(400).json({ error: 'invalid_payload' })
+        const body = req.body || {}
+        const { sku_code, type, options = {}, flags = [], quantity = 1 } = body
 
-        // Check credits using MongoDB
+        const legacyTypeToSku = {
+            'face-swap': 'A1-IG',
+            'avatar': 'A1-IG',
+            'image-to-video': 'C2-30',
+            'enhance': 'A3-4K',
+            'bgremove': 'A4-BR'
+        }
+
+        const skuCode = sku_code || legacyTypeToSku[type] || null
+        if (!skuCode) return res.status(400).json({ error: 'invalid_payload' })
+
+        const tool = Array.isArray(catalogFullConfig.catalog)
+            ? catalogFullConfig.catalog.find(t => t.sku_code === skuCode)
+            : null
+
+        const normalizeA2EType = (raw) => {
+            if (!raw) return null
+            const t = String(raw).toLowerCase()
+            if (t === 'face-swap') return 'faceswap'
+            if (t === 'image-to-video') return 'img2vid'
+            if (t.startsWith('img2vid')) return 'img2vid'
+            if (t.startsWith('faceswap')) return 'faceswap'
+            if (t.startsWith('enhance')) return 'enhance'
+            if (t.startsWith('bgremove')) return 'bgremove'
+            if (t.startsWith('avatar')) return 'avatar'
+            if (t === 'faceswap' || t === 'img2vid' || t === 'enhance' || t === 'bgremove' || t === 'avatar') return t
+            return null
+        }
+
+        const a2eType = normalizeA2EType(tool && tool.key ? tool.key : type)
+        if (!a2eType) return res.status(400).json({ error: 'unsupported_tool' })
+
+        // Prepare input media URL
+        let mediaInput = body.media_url || body.mediaUrl || body.sourceImage || body.source_image || null
+
+        if (!mediaInput) {
+            // Backwards compatibility: fall back to last uploaded job
+            const { Job } = require('./models')
+            const upload = await Job.findOne({
+                user_id: req.user.id,
+                type: a2eType,
+                source_url: { $exists: true, $ne: null }
+            }).sort({ created_at: -1 })
+            if (!upload || !upload.source_url) {
+                return res.status(400).json({ error: 'no_media_uploaded' })
+            }
+            mediaInput = upload.source_url
+        }
+
+        // If we got a data URL, upload it to Cloudinary
+        let mediaUrl = mediaInput
+        if (typeof mediaInput === 'string' && mediaInput.startsWith('data:') && cloudinary.config().cloud_name) {
+            const uploaded = await cloudinary.uploader.upload(mediaInput)
+            mediaUrl = uploaded.secure_url
+        }
+
+        // Compute credits to charge (credits-first)
+        const sku = await db.getSkuByCode(skuCode)
+        if (!sku) return res.status(404).json({ error: 'sku_not_found' })
+
+        const defaultFlags = Array.isArray(sku.default_flags) ? sku.default_flags : []
+        const appliedFlags = Array.isArray(flags) ? flags : []
+        const allFlags = [...new Set([...defaultFlags, ...appliedFlags])]
+        const flagRecords = allFlags.length > 0 ? await db.getFlagsByCodes(allFlags) : []
+
+        let multiplier = 1.0
+        let flatAdd = 0
+        for (const flag of flagRecords) {
+            if (flag.price_multiplier && flag.price_multiplier !== 1.0) multiplier *= Number(flag.price_multiplier)
+            if (flag.price_add_flat_cents && flag.price_add_flat_cents > 0) flatAdd += Number(flag.price_add_flat_cents)
+        }
+
+        const qty = Math.max(1, Number(quantity) || 1)
+        if (qty >= 50) multiplier *= 0.8
+        else if (qty >= 10) multiplier *= 0.9
+
+        const baseCreditsTotal = (Number(sku.base_credits) || 0) * qty
+        const costCredits = Math.max(1, Math.round(baseCreditsTotal * multiplier) + flatAdd)
+
+        // Check credits
         const creditData = await db.getCredits(req.user.id)
-        if (!creditData || creditData.balance < 10) {
+        if (!creditData || creditData.balance < costCredits) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
 
-        // Get the most recent uploaded job/creation for this type using MongoDB
-        const { Job } = require('./models')
-        const upload = await Job.findOne({
-            user_id: req.user.id,
-            type: type,
-            source_url: { $exists: true, $ne: null }
-        }).sort({ created_at: -1 })
-
-        if (!upload || !upload.source_url) {
-            return res.status(400).json({ error: 'no_media_uploaded' })
-        }
-
-        const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
-
-        let a2eResponse
-        try {
-            a2eResponse = await a2eService.startTask(type, upload.source_url, options)
-        } catch (a2eError) {
-            logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
-            return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
-        }
-
-        if (!a2eResponse || !a2eResponse.data || !a2eResponse.data._id) {
-            return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
-        }
-
-        const taskId = a2eResponse.data._id
-        const costCredits = a2eResponse.data.coins || 10
-
-        // Deduct credits using MongoDB
+        // Deduct credits before starting job
         try {
             await db.deductCredits(req.user.id, costCredits)
         } catch (error) {
             return res.status(402).json({ error: 'insufficient_credits' })
         }
 
-        // Update the job with a2e task info using MongoDB
-        await db.updateJob(upload._id.toString(), {
+        // Create a new job record tied to this request
+        const job = await db.createJob(req.user.id, a2eType, mediaUrl, {
+            sku_code: skuCode,
+            quantity: qty,
+            flags: allFlags,
+            ...options
+        })
+
+        const a2eService = new A2EService(process.env.A2E_API_KEY, process.env.A2E_BASE_URL)
+
+        let a2eResponse
+        try {
+            a2eResponse = await a2eService.startTask(a2eType, mediaUrl, options)
+        } catch (a2eError) {
+            // Refund credits if we couldn't start the task
+            await db.addCredits(req.user.id, costCredits)
+            await db.updateJob(job.id, { status: 'failed', error: a2eError.message, credits_used: 0 })
+            logger.error({ msg: 'a2e_api_error', error: String(a2eError) })
+            return res.status(500).json({ error: 'a2e_api_error', details: a2eError.message })
+        }
+
+        const taskId = a2eResponse?.data?._id || a2eResponse?.data?.data?._id
+        if (!taskId) {
+            await db.addCredits(req.user.id, costCredits)
+            await db.updateJob(job.id, { status: 'failed', error: 'Invalid response from A2E API', credits_used: 0 })
+            return res.status(500).json({ error: 'a2e_api_error', details: 'Invalid response from A2E API' })
+        }
+
+        await db.updateJob(job.id, {
             status: 'processing',
             a2e_task_id: taskId,
             credits_used: costCredits
         })
 
-        // Start polling for this job
-        startStatusPolling(upload._id.toString(), type, taskId)
-
-        res.json({ job_id: upload._id.toString(), status: 'processing', estimated_credits: costCredits })
+        startStatusPolling(job.id, a2eType, taskId)
+        res.json({ job_id: job.id, status: 'processing', estimated_credits: costCredits })
     } catch (e) {
         logger.error({ msg: 'process_error', error: String(e) })
         res.status(500).json({ error: 'process_failed' })

@@ -75,3 +75,6 @@ legacy/
 # Environment files
 *.env
 *.env.*
+FIXED_ENV_VARS.txt
+DEPLOYMENT_FIX.md
+original_CreateNew.js
